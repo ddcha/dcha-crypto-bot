@@ -1,0 +1,8 @@
+a_atr_expansion
+a_atr_expansion,a_volume_strict
+a_volume,a_atr_expansion
+a_killzone,a_atr_expansion,a_volume_strict
+a_sweep,a_atr_expansion,a_disp_strength
+a_trend_align,a_atr_expansion,a_volume_strict
+a_volume,a_atr_expansion,a_disp_strength
+a_killzone,a_atr_expansion

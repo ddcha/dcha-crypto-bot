@@ -1,0 +1,186 @@
+{
+  "system": {
+    "trading_enabled": true,
+    "kill_switch": false,
+    "emergency_close_all": false,
+    "last_emergency_close_all_at": null,
+    "last_loop_time": "2026-06-04T09:34:48.958020+00:00",
+    "last_error": null,
+    "engine_running": true,
+    "engine_pid": 382570,
+    "engine_started_at": "2026-06-03T21:01:28.046255+00:00",
+    "engine_stopped_at": null,
+    "stop_requested": false,
+    "last_action": "LIGHT SLEEP - 5s",
+    "last_system_check": {
+      "ok": true,
+      "checks": [
+        {
+          "name": "api_present",
+          "ok": "✅",
+          "detail": "LIVE API 입력"
+        },
+        {
+          "name": "strategy_engine_import",
+          "ok": "✅",
+          "detail": "strategy_engine import ok"
+        },
+        {
+          "name": "main_import",
+          "ok": "✅",
+          "detail": "main import ok"
+        },
+        {
+          "name": "server_time",
+          "ok": "✅",
+          "detail": "Bybit server time ok"
+        },
+        {
+          "name": "wallet_balance",
+          "ok": "✅",
+          "detail": "wallet balance ok"
+        }
+      ]
+    },
+    "watchdog_enabled": true,
+    "watchdog_running": true,
+    "watchdog_pid": 382569,
+    "watchdog_last_check": "2026-06-04T09:34:48.899758+00:00",
+    "performance_snapshots": {
+      "daily": {
+        "2026-06-03": 1836.24877957,
+        "2026-06-04": 1839.11997915
+      },
+      "monthly": {
+        "2026-06": 1836.24877957
+      },
+      "yearly": {
+        "2026": 1836.24877957
+      }
+    }
+  },
+  "symbols": {
+    "BTCUSDT": {
+      "last_signal_timestamp": null,
+      "last_signal_side": null,
+      "last_signal_payload": null,
+      "last_order_signal_timestamp": null,
+      "last_order_side": null,
+      "last_order_response": null,
+      "last_fill_snapshot": null,
+      "last_tp1_order_response": null,
+      "last_tp1_fill_snapshot": null
+    },
+    "ETHUSDT": {
+      "last_signal_timestamp": null,
+      "last_signal_side": null,
+      "last_signal_payload": null,
+      "last_order_signal_timestamp": null,
+      "last_order_side": null,
+      "last_order_response": null,
+      "last_fill_snapshot": null,
+      "last_tp1_order_response": null,
+      "last_tp1_fill_snapshot": null
+    },
+    "SOLUSDT": {
+      "last_signal_timestamp": null,
+      "last_signal_side": null,
+      "last_signal_payload": null,
+      "last_order_signal_timestamp": null,
+      "last_order_side": null,
+      "last_order_response": null,
+      "last_fill_snapshot": null,
+      "last_tp1_order_response": null,
+      "last_tp1_fill_snapshot": null
+    },
+    "XRPUSDT": {
+      "last_signal_timestamp": null,
+      "last_signal_side": null,
+      "last_signal_payload": null,
+      "last_order_signal_timestamp": null,
+      "last_order_side": null,
+      "last_order_response": null,
+      "last_fill_snapshot": null,
+      "last_tp1_order_response": null,
+      "last_tp1_fill_snapshot": null
+    },
+    "DOGEUSDT": {
+      "last_signal_timestamp": null,
+      "last_signal_side": null,
+      "last_signal_payload": null,
+      "last_order_signal_timestamp": null,
+      "last_order_side": null,
+      "last_order_response": null,
+      "last_fill_snapshot": null,
+      "last_tp1_order_response": null,
+      "last_tp1_fill_snapshot": null
+    },
+    "AVAXUSDT": {
+      "last_signal_timestamp": null,
+      "last_signal_side": null,
+      "last_signal_payload": null,
+      "last_order_signal_timestamp": null,
+      "last_order_side": null,
+      "last_order_response": null,
+      "last_fill_snapshot": null,
+      "last_tp1_order_response": null,
+      "last_tp1_fill_snapshot": null
+    },
+    "LINKUSDT": {
+      "last_signal_timestamp": "2026-06-03 16:00:00+00:00",
+      "last_signal_side": null,
+      "last_signal_payload": {
+        "should_enter": false,
+        "reason": "no_valid_signal_on_latest_closed_h4",
+        "timestamp": "2026-06-03 16:00:00+00:00",
+        "candidate_count": 6,
+        "same_side_cooldown": null,
+        "trend": "down",
+        "market_state": "bull_transition",
+        "latest_close": 8.206
+      },
+      "last_order_signal_timestamp": null,
+      "last_order_side": null,
+      "last_order_response": null,
+      "last_fill_snapshot": null,
+      "last_tp1_order_response": null,
+      "last_tp1_fill_snapshot": null
+    },
+    "BNBUSDT": {
+      "last_signal_timestamp": null,
+      "last_signal_side": null,
+      "last_signal_payload": null,
+      "last_order_signal_timestamp": null,
+      "last_order_side": null,
+      "last_order_response": null,
+      "last_fill_snapshot": null,
+      "last_tp1_order_response": null,
+      "last_tp1_fill_snapshot": null
+    },
+    "ADAUSDT": {
+      "last_signal_timestamp": null,
+      "last_signal_side": null,
+      "last_signal_payload": null,
+      "last_order_signal_timestamp": null,
+      "last_order_side": null,
+      "last_order_response": null,
+      "last_fill_snapshot": null,
+      "last_tp1_order_response": null,
+      "last_tp1_fill_snapshot": null
+    }
+  },
+  "managed_positions": {},
+  "latest_open_positions": {},
+  "exchange_positions": {},
+  "engine_positions_view": {},
+  "symbol_states": {
+    "BNBUSDT": {
+      "last_exit_time": "2026-06-04T03:32:50.250255+00:00",
+      "last_exit_side": "Sell"
+    },
+    "DOGEUSDT": {
+      "last_exit_time": "2026-06-04T03:32:50.250300+00:00",
+      "last_exit_side": "Sell"
+    }
+  }
+}

@@ -1,0 +1,717 @@
+2a3,29
+> #                  + [H1-CHoCH-Trend Patch] (5/9 by 둠챠 결정)
+> #
+> # ⭐⭐⭐ [H1-CHoCH-Trend Patch] 변경점 — 2025/05/09
+> # ─────────────────────────────────────────────────────────
+> # H4 trend 판정: EMA20/50/200 정렬 (후행) → H1 CHoCH state (즉시)
+> #
+> # 변경된 함수 (3곳):
+> #   1. apply_basic_indicators
+> #      - data["trend"] 채우는 부분 → "neutral" placeholder만
+> #      - EMA20/50/200 계산은 유지 (다른 indicator 확장 대비)
+> #   2. apply_h1_choch_trend  ← 신설
+> #      - 각 H4 시점 t에서 df_h1의 마지막 bull_choch / bear_choch
+> #        timestamp 비교 → 더 최근인 쪽이 trend ("up"/"down"/"neutral")
+> #      - SMC 정통: 반대 방향 CHoCH 나올 때까지 state 유지
+> #      - stale 컷오프 없음, break_atr_mult=0.12 (현재값 유지)
+> #   3. apply_indicators_and_build
+> #      - apply_h4_market_state 를 H1 처리 다음으로 이동
+> #      - 그 직전에 apply_h1_choch_trend(df, df_h1) 호출 추가
+> #
+> # 자동 적용되는 사용처 (코드 변경 X, df_struct["trend"] 값만 다름):
+> #   - Hard gate SHORT (line 2934)        : trend=="up" → 진입 차단
+> #   - Hard gate LONG  (line 3020)        : trend=="down" → 진입 차단
+> #   - a_trend_align atom (line 1490)     : 12 atomic 태그 1개
+> #   - run_potential trend_align (2271)   : RP score +1
+> #   - structure score boost (2005, 2105) : base_score +1.5
+> #   - apply_h4_market_state base_trend   : up/down/neutral 결정
+> # ─────────────────────────────────────────────────────────
+914a942,1067
+> # ⭐⭐⭐ Step 2 1차 처방 flags ⭐⭐⭐
+> # (각 flag 별도 ON/OFF로 ablation 가능)
+> # B/C 폐기 — Reverse exit는 효과 모호, Fresh CHoCH는 87% 적용으로 시스템 알파 손상
+> USE_PD_AWARE_FILTER  = True    # discount SHORT risk × 0.5 (검증됨: PF 2.08 → 2.23 +7%)
+> USE_REVERSE_EXIT     = False   # 폐기
+> USE_FRESH_CHOCH_RISK = False   # 폐기
+> PD_AWARE_DISCOUNT_SHORT_MULT = 0.5
+> FRESH_CHOCH_AGE_THRESHOLD_H  = 24.0
+> FRESH_CHOCH_RISK_MULT        = 0.5
+> REVERSE_EXIT_CUTOFF_H        = 8.0
+> 
+> # ⭐⭐⭐ Step 3 (Wave-aware 옵션 A): Weak Setup Blacklist ⭐⭐⭐
+> # (d1_wave, h4_wave, h1_wave, side) 조합이 backtest 분석에서 PF < 0.7 × baseline (≈ 1.87) 인 setup
+> # 진입 시 매칭되면 risk × 0.3
+> USE_WEAK_SETUP_FILTER = True
+> WEAK_SETUP_RISK_MULT = 0.2  # fine-tuning sweep — 더 강하게 (0.3 → 0.2)
+> 
+> # ⭐⭐ 옵션 1 (Balance-aware 처방): 자본 < 임계 시기엔 WEAK 처방 비활성, STRONG만 적용 ⭐⭐
+> # 목적: 자본 작은 초기에 risk 축소로 retire 늦어지는 문제 해결
+> USE_BALANCE_AWARE_WEAK_SKIP = True
+> WEAK_SKIP_BALANCE_THRESHOLD_USDT = 50_000.0  # 이 이하에선 WEAK 비활성, STRONG은 적용
+> 
+> # ⭐⭐⭐ Option 2B: H1 bar-by-bar Simulator ⭐⭐⭐
+> # trade simulator를 H1 봉 단위로 호출 (SL/TP/runner 모두 H1 wick 기준)
+> # - True: df_h1으로 sim 호출 (max_hold_bars × 4 자동 변환)
+> # - False: 기존 H4 기준 sim (default — H1 모드는 simulate_trade core가 H4 가정이라 알파 죽음)
+> # generate_candidates와 execute_and_resimulate_trade 둘 다 영향
+> USE_H1_BAR_BY_BAR_SIMULATOR = False  # 폐기 — H4 기반 simulator로 복귀
+> 
+> 
+> def find_h1_entry_idx(df_h1, h4_timestamp):
+>     """H4 봉 timestamp를 받아 그 시점의 H1 봉 인덱스 반환. H1 봉이 정확히 같은 timestamp일 때."""
+>     if df_h1 is None or len(df_h1) == 0:
+>         return None
+>     try:
+>         h1_ts_target = pd.to_datetime(h4_timestamp, utc=True)
+>         m = df_h1.index[df_h1["timestamp"] == h1_ts_target]
+>         if len(m) > 0:
+>             return int(m[0])
+>         # exact match 실패 시 가장 가까운 H1 봉 (h4_ts 이상 첫 봉)
+>         m2 = df_h1.index[df_h1["timestamp"] >= h1_ts_target]
+>         if len(m2) > 0:
+>             return int(m2[0])
+>     except Exception:
+>         pass
+>     return None
+> 
+> # ⭐⭐⭐ Step 3 (Wave-aware 옵션 B): 일반 패턴 규칙 (rule-based) ⭐⭐⭐
+> # 데이터에서 검증된 일반 패턴 — risk 축소/boost
+> # A blacklist 와 함께 적용 시 곱셈 (예: weak setup × opposite = 0.3 × 0.5 = 0.15)
+> # 너무 작아지지 않도록 floor 적용
+> USE_WAVE_PATTERN_RULES = True
+> PATTERN_MULT_FLOOR     = 0.2
+> PATTERN_MULT_CEILING   = 2.0
+> PATTERN_MULTS = {
+>     # WEAK (검증된 약점 일반 패턴)
+>     "weak_d1_h4_opposite":       0.5,   # PF 1.50, 56% baseline
+>     "weak_h1_expansion_short":   0.5,   # PF 1.36, 51% baseline
+>     "weak_d1up_h4corr_long":     0.7,   # PF 1.20, 45% baseline (D1up 안에서 H4 correction LONG)
+>     # STRONG (검증된 강점 일반 패턴)
+>     "strong_expansion_x_expansion":  1.5,   # PF 5.24, 196% baseline (D1+H4 모두 expansion)
+>     "strong_h1_compression_short":   1.3,   # PF 4.92, 184% baseline
+>     "strong_h1_compression_long":    1.2,   # PF 3.08, 115% baseline
+>     # ⭐⭐ 옵션 C (정밀 sub-pattern, T2 분석 기반) ⭐⭐
+>     "weak_T2_h1expansion":           0.3,   # D1=H4 same direction + H1=expansion, n=45 PF 0.59
+>     "strong_T2aligned_h1comp_short": 1.5,   # D1=H4=down + H1=compression + SHORT, n=16 PF 20.01 ⭐
+> }
+> 
+> def get_wave_pattern_mult(d1ws, h4ws, h1ws, side, skip_weak=False):
+>     """data 검증된 일반 패턴 규칙. 매칭되는 패턴들의 mult 곱한 후 [floor, ceiling] clamp.
+>     skip_weak=True 면 WEAK 패턴 모두 비활성 (STRONG boost만 적용) — balance-aware 모드용."""
+>     if not USE_WAVE_PATTERN_RULES:
+>         return 1.0
+>     mult = 1.0
+>     if not skip_weak:
+>         # WEAK (balance 임계 이상일 때만 적용)
+>         if ((d1ws == "impulse_up" and h4ws == "impulse_down") or
+>             (d1ws == "impulse_down" and h4ws == "impulse_up")):
+>             mult *= PATTERN_MULTS["weak_d1_h4_opposite"]
+>         if h1ws == "expansion" and side == "short":
+>             mult *= PATTERN_MULTS["weak_h1_expansion_short"]
+>         if d1ws == "impulse_up" and h4ws in ("compression", "expansion") and side == "long":
+>             mult *= PATTERN_MULTS["weak_d1up_h4corr_long"]
+>         # 옵션 C WEAK: D1=H4 same direction (impulse) + H1=expansion
+>         if h1ws == "expansion" and (
+>             (d1ws == "impulse_up" and h4ws == "impulse_up") or
+>             (d1ws == "impulse_down" and h4ws == "impulse_down")
+>         ):
+>             mult *= PATTERN_MULTS["weak_T2_h1expansion"]
+>     # STRONG (항상 적용 — boost는 자본 작을 때도 자본 축적 가속에 도움)
+>     if d1ws == "expansion" and h4ws == "expansion":
+>         mult *= PATTERN_MULTS["strong_expansion_x_expansion"]
+>     if h1ws == "compression" and side == "short":
+>         mult *= PATTERN_MULTS["strong_h1_compression_short"]
+>     if h1ws == "compression" and side == "long":
+>         mult *= PATTERN_MULTS["strong_h1_compression_long"]
+>     # 옵션 C STRONG: D1=H4=impulse_down + H1=compression + SHORT (PF 20!)
+>     if (d1ws == "impulse_down" and h4ws == "impulse_down" and
+>         h1ws == "compression" and side == "short"):
+>         mult *= PATTERN_MULTS["strong_T2aligned_h1comp_short"]
+>     # clamp
+>     return max(min(mult, PATTERN_MULT_CEILING), PATTERN_MULT_FLOOR)
+> WEAK_SETUPS_SET = {
+>     ("impulse_up",   "impulse_down",  "impulse_up",   "short"),  # PF 0.29
+>     ("compression",  "compression",   "compression",  "short"),  # PF 0.31
+>     ("impulse_down", "impulse_down",  "expansion",    "short"),  # PF 0.35
+>     ("impulse_down", "impulse_down",  "impulse_down", "short"),  # PF 0.38
+>     ("expansion",    "impulse_up",    "impulse_down", "long"),   # PF 0.44
+>     ("impulse_up",   "compression",   "impulse_down", "long"),   # PF 0.45
+>     ("impulse_up",   "impulse_up",    "expansion",    "short"),  # PF 0.50
+>     ("expansion",    "impulse_up",    "compression",  "long"),   # PF 0.53
+>     ("impulse_up",   "expansion",     "compression",  "short"),  # PF 0.59
+>     ("compression",  "impulse_up",    "impulse_down", "long"),   # PF 0.63
+>     ("expansion",    "impulse_up",    "impulse_up",   "long"),   # PF 0.63
+>     ("compression",  "impulse_down",  "expansion",    "short"),  # PF 0.64
+>     ("impulse_down", "impulse_down",  "expansion",    "long"),   # PF 0.67
+>     ("impulse_up",   "compression",   "expansion",    "long"),   # PF 0.73
+>     ("impulse_down", "expansion",     "impulse_up",   "short"),  # PF 0.95
+>     ("impulse_down", "compression",   "impulse_up",   "short"),  # PF 1.16
+>     ("impulse_down", "impulse_down",  "impulse_up",   "long"),   # PF 1.18
+>     ("compression",  "compression",   "impulse_up",   "long"),   # PF 1.23
+>     ("impulse_up",   "expansion",     "impulse_down", "long"),   # PF 1.24
+>     ("impulse_up",   "impulse_up",    "impulse_up",   "long"),   # PF 1.63
+>     ("impulse_down", "impulse_up",    "compression",  "long"),   # PF 1.73
+> }
+> 
+1172a1326,1341
+>     # ⭐ Step 1 모니터링: EMA200 + slope 추가 (트렌드 강도/방향 진단용)
+>     d1["ema200"] = d1["close"].ewm(span=200, adjust=False).mean()
+>     # 20일 전 대비 % 변화 (D1 EMA200 기울기, regime 모호성 측정)
+>     d1["ema200_slope_pct_20d"] = (
+>         (d1["ema200"] - d1["ema200"].shift(20)) / d1["ema200"].shift(20) * 100.0
+>     )
+>     # EMA50/200 정렬 기반 ema_state (D1 큰 트렌드)
+>     def _get_ema_state(r):
+>         if pd.isna(r["ema_slow"]) or pd.isna(r["ema200"]):
+>             return "neutral"
+>         if r["ema_slow"] > r["ema200"]:
+>             return "bull"
+>         if r["ema_slow"] < r["ema200"]:
+>             return "bear"
+>         return "neutral"
+>     d1["ema_state"] = d1.apply(_get_ema_state, axis=1)
+1183a1353,1357
+> 
+>     # ⭐ D1 wave_state (HH/HL 기반 swing classification)
+>     # D1 봉 수가 적으니 swing_len 작게 (3) — apply_pivots는 H4용이지만 D1에도 동일 로직 적용 가능
+>     d1 = apply_pivots(d1, swing_len=3)
+>     d1 = apply_wave_state(d1)
+1558,1565c1732,1735
+<     def get_trend(row):
+<         if row["ema20"] < row["ema50"] < row["ema200"]:
+<             return "down"
+<         if row["ema20"] > row["ema50"] > row["ema200"]:
+<             return "up"
+<         return "neutral"
+< 
+<     data["trend"] = data.apply(get_trend, axis=1)
+---
+>     # ⭐ [H1-CHoCH-Trend Patch] EMA 기반 trend 판정 제거
+>     # H4 trend 는 apply_h1_choch_trend(df_h4, df_h1) 에서 H1 CHoCH state 로 채워짐.
+>     # 여기는 placeholder "neutral" 만. (H1 dataframe 의 trend 컬럼은 어디서도 사용 안 됨)
+>     data["trend"] = "neutral"
+1724a1895,1930
+> def apply_wave_state(data):
+>     """
+>     swing sequence 기반 wave_state 분류 (각 timeframe 내부, 단일 TF context).
+>       - impulse_up:    HH + HL  (Higher High + Higher Low)
+>       - impulse_down:  LL + LH  (Lower Low + Lower High)
+>       - expansion:     HH + LL  (변동성 확장 — 양방향 break)
+>       - compression:   LH + HL  (수렴 — triangle pattern)
+>       - unclear:       data 부족 또는 동일 가격 등 edge case
+> 
+>     [선결] data 에 last_pivot_high, prev_pivot_high, last_pivot_low, prev_pivot_low 가 있어야 함.
+>     """
+>     data = data.copy()
+>     data["wave_state"] = "unclear"
+>     for i in range(len(data)):
+>         lph = data.loc[i, "last_pivot_high"]
+>         pph = data.loc[i, "prev_pivot_high"]
+>         lpl = data.loc[i, "last_pivot_low"]
+>         ppl = data.loc[i, "prev_pivot_low"]
+>         if pd.isna(lph) or pd.isna(pph) or pd.isna(lpl) or pd.isna(ppl):
+>             continue
+>         is_HH = lph > pph
+>         is_LH = lph < pph
+>         is_HL = lpl > ppl
+>         is_LL = lpl < ppl
+>         if is_HH and is_HL:
+>             data.loc[i, "wave_state"] = "impulse_up"
+>         elif is_LL and is_LH:
+>             data.loc[i, "wave_state"] = "impulse_down"
+>         elif is_HH and is_LL:
+>             data.loc[i, "wave_state"] = "expansion"
+>         elif is_LH and is_HL:
+>             data.loc[i, "wave_state"] = "compression"
+>         # else: unclear (e.g. lph == pph 등 동일 가격)
+>     return data
+> 
+> 
+1784a1991,2095
+> # ⭐ [H1-CHoCH-Trend Patch] H4 trend 를 H1 CHoCH state 로 채움
+> # =========================================================
+> def apply_h1_choch_trend(df_h4, df_h1):
+>     """
+>     H4 dataframe 의 trend 컬럼을 H1 CHoCH state 기반으로 갈아끼움.
+> 
+>     각 H4 시점 t 에 대해:
+>       - df_h1 에서 timestamp <= t 인 마지막 bull_choch 시점과
+>         마지막 bear_choch 시점을 비교해 더 최근인 쪽이 trend
+>       - 둘 다 없음 → "neutral"
+>       - 하나만 있음 → 그 방향
+>       - 동시 발생 (희박) → "neutral"
+> 
+>     SMC 정통: CHoCH state 는 반대 방향 CHoCH 가 나올 때까지 유효.
+>     stale 컷오프 없음.
+> 
+>     [선결 조건] df_h1 에 apply_choch() 가 이미 적용되어 있어야 함
+>     (df_h1["bull_choch"], df_h1["bear_choch"] 컬럼 존재).
+>     """
+>     df_h4 = df_h4.copy()
+> 
+>     if "bull_choch" not in df_h1.columns or "bear_choch" not in df_h1.columns:
+>         raise ValueError(
+>             "apply_h1_choch_trend: df_h1 에 bull_choch/bear_choch 컬럼이 없음. "
+>             "apply_choch(df_h1) 호출 후 사용할 것."
+>         )
+> 
+>     # H1 에서 CHoCH 발생한 timestamp 만 추출 (이미 시간순 정렬됨)
+>     bull_ts_arr = df_h1.loc[df_h1["bull_choch"], "timestamp"].sort_values().values
+>     bear_ts_arr = df_h1.loc[df_h1["bear_choch"], "timestamp"].sort_values().values
+> 
+>     n_bull = len(bull_ts_arr)
+>     n_bear = len(bear_ts_arr)
+>     h4_ts = df_h4["timestamp"].values
+>     n_h4 = len(h4_ts)
+> 
+>     # searchsorted: t 이하의 마지막 인덱스 찾기 (없으면 -1)
+>     if n_bull > 0:
+>         bull_last_pos = np.searchsorted(bull_ts_arr, h4_ts, side="right") - 1
+>     else:
+>         bull_last_pos = np.full(n_h4, -1, dtype=int)
+> 
+>     if n_bear > 0:
+>         bear_last_pos = np.searchsorted(bear_ts_arr, h4_ts, side="right") - 1
+>     else:
+>         bear_last_pos = np.full(n_h4, -1, dtype=int)
+> 
+>     trends = np.array(["neutral"] * n_h4, dtype=object)
+>     # ⭐ Step 1 모니터링: 진입 시점 H4 row에서 마지막 CHoCH ts/방향 직접 lookup 가능하도록 컬럼 추가
+>     last_choch_ts = np.array([pd.NaT] * n_h4, dtype=object)
+>     last_choch_dir = np.array(["none"] * n_h4, dtype=object)
+> 
+>     for k in range(n_h4):
+>         bp = bull_last_pos[k]
+>         rp = bear_last_pos[k]
+>         has_bull = bp >= 0
+>         has_bear = rp >= 0
+> 
+>         if not has_bull and not has_bear:
+>             continue  # neutral, no CHoCH ever
+>         if has_bull and not has_bear:
+>             trends[k] = "up"
+>             last_choch_ts[k] = bull_ts_arr[bp]
+>             last_choch_dir[k] = "bull"
+>             continue
+>         if has_bear and not has_bull:
+>             trends[k] = "down"
+>             last_choch_ts[k] = bear_ts_arr[rp]
+>             last_choch_dir[k] = "bear"
+>             continue
+>         # 둘 다 있음 — 더 최근인 쪽
+>         tb = bull_ts_arr[bp]
+>         tr_ = bear_ts_arr[rp]
+>         if tb > tr_:
+>             trends[k] = "up"
+>             last_choch_ts[k] = tb
+>             last_choch_dir[k] = "bull"
+>         elif tr_ > tb:
+>             trends[k] = "down"
+>             last_choch_ts[k] = tr_
+>             last_choch_dir[k] = "bear"
+>         else:
+>             # 동시 발생 — neutral, 둘 중 아무거나 기록 (매우 희박)
+>             last_choch_ts[k] = tb
+>             last_choch_dir[k] = "tie"
+> 
+>     df_h4["trend"] = trends
+>     df_h4["last_choch_ts"] = last_choch_ts
+>     df_h4["last_choch_dir"] = last_choch_dir
+> 
+>     # 진단용 통계 출력
+>     n_up = int((trends == "up").sum())
+>     n_dn = int((trends == "down").sum())
+>     n_nu = int((trends == "neutral").sum())
+>     print(
+>         f"  [H1-CHoCH-Trend] H4 bars={n_h4} | "
+>         f"up={n_up} ({n_up/max(n_h4,1)*100:.1f}%) | "
+>         f"down={n_dn} ({n_dn/max(n_h4,1)*100:.1f}%) | "
+>         f"neutral={n_nu} ({n_nu/max(n_h4,1)*100:.1f}%) | "
+>         f"H1_bull_choch_n={n_bull} H1_bear_choch_n={n_bear}"
+>     )
+>     return df_h4
+> 
+> 
+> # =========================================================
+2736a3048,3052
+>     # ⭐ [H1-CHoCH-Trend Patch] 호출 순서 재조정
+>     # 변경 전: H4 indicator 전체 → H1 indicator 전체
+>     # 변경 후: H4 일부 → H1 전체 → apply_h1_choch_trend(df, df_h1) → H4 market_state
+>     # 이유: H4 trend 가 H1 CHoCH 로 채워진 뒤에야 apply_h4_market_state 의 base_trend 가 정확함
+> 
+2744a3061
+>     df = apply_wave_state(df)   # ⭐ H4 wave_state (impulse/correction/expansion/compression)
+2746c3063
+<     df = apply_h4_market_state(df, transition_bars=H4_MARKET_STATE_BARS)
+---
+>     # apply_h4_market_state 는 H1 CHoCH trend 적용 후 호출 (아래)
+2755a3073
+>     df_h1 = apply_wave_state(df_h1)   # ⭐ H1 wave_state
+2758a3077,3082
+>     # ⭐ [H1-CHoCH-Trend Patch] H4 trend 컬럼을 H1 CHoCH state 로 갈아끼움
+>     df = apply_h1_choch_trend(df, df_h1)
+> 
+>     # 이제 base_trend 가 H1 CHoCH 기반이므로 market_state 도 같은 기반으로 계산됨
+>     df = apply_h4_market_state(df, transition_bars=H4_MARKET_STATE_BARS)
+> 
+3107,3112c3431,3461
+<         sim = simulate_trade_with_plan_original(
+<             df_local=df_struct, entry_idx=i, side=entry_side,
+<             entry=fill_entry_price, sl=sl, qty=1.0, fee_rate=FEE_RATE,
+<             grade=grade, plan=tp_plan,
+<             use_seq_runner_protection=USE_SEQ_RUNNER_PROTECTION_BASELINE,
+<         )
+---
+>         # ⭐⭐⭐ H1 bar-by-bar simulator (옵션 2B) ⭐⭐⭐
+>         if USE_H1_BAR_BY_BAR_SIMULATOR:
+>             _h1_entry_idx = find_h1_entry_idx(df_h1, row["timestamp"])
+>             if _h1_entry_idx is not None:
+>                 # max_hold_bars × 4 (H4 → H1 단위 변환)
+>                 _plan_h1 = {**tp_plan, "max_hold_bars": tp_plan["max_hold_bars"] * 4}
+>                 sim = simulate_trade_with_plan_original(
+>                     df_local=df_h1, entry_idx=_h1_entry_idx, side=entry_side,
+>                     entry=fill_entry_price, sl=sl, qty=1.0, fee_rate=FEE_RATE,
+>                     grade=grade, plan=_plan_h1,
+>                     use_seq_runner_protection=USE_SEQ_RUNNER_PROTECTION_BASELINE,
+>                 )
+>                 # cooldown 비교용 — H1 exit_idx → H4 인덱스 환산 (i와 같은 단위로)
+>                 _sim_exit_idx_h4 = i + max(1, (sim["exit_idx"] - _h1_entry_idx) // 4)
+>             else:
+>                 # fallback to H4
+>                 sim = simulate_trade_with_plan_original(
+>                     df_local=df_struct, entry_idx=i, side=entry_side,
+>                     entry=fill_entry_price, sl=sl, qty=1.0, fee_rate=FEE_RATE,
+>                     grade=grade, plan=tp_plan,
+>                     use_seq_runner_protection=USE_SEQ_RUNNER_PROTECTION_BASELINE,
+>                 )
+>                 _sim_exit_idx_h4 = sim["exit_idx"]
+>         else:
+>             sim = simulate_trade_with_plan_original(
+>                 df_local=df_struct, entry_idx=i, side=entry_side,
+>                 entry=fill_entry_price, sl=sl, qty=1.0, fee_rate=FEE_RATE,
+>                 grade=grade, plan=tp_plan,
+>                 use_seq_runner_protection=USE_SEQ_RUNNER_PROTECTION_BASELINE,
+>             )
+>             _sim_exit_idx_h4 = sim["exit_idx"]
+3117a3467
+>         # cooldown은 H4 인덱스 기준 (i와 같은 단위)
+3119c3469
+<             last_long_exit_idx = sim["exit_idx"]
+---
+>             last_long_exit_idx = _sim_exit_idx_h4
+3121c3471
+<             last_short_exit_idx = sim["exit_idx"]
+---
+>             last_short_exit_idx = _sim_exit_idx_h4
+3240a3591
+>         "df_d1": df_d1,                # ⭐ Step 1 모니터링: simulate 시 D1 ema_state/slope lookup용
+3314c3665
+< def execute_and_resimulate_trade(row, qty, df_h4):
+---
+> def execute_and_resimulate_trade(row, qty, df_h4, df_h1=None):
+3322,3327c3673,3698
+<     sim = simulate_trade_with_plan_runner_no_time_exit(
+<         df_local=df_h4, entry_idx=entry_idx, side=row["side"],
+<         entry=avg_entry, sl=sl, qty=fill_qty, fee_rate=FEE_RATE,
+<         grade=row["grade"], plan=get_tp_plan(row["expansion_state"]),
+<         use_seq_runner_protection=USE_SEQ_RUNNER_PROTECTION_BASELINE,
+<     )
+---
+>     # ⭐⭐⭐ H1 bar-by-bar simulator (옵션 2B) ⭐⭐⭐
+>     _tp_plan = get_tp_plan(row["expansion_state"])
+>     if USE_H1_BAR_BY_BAR_SIMULATOR and df_h1 is not None:
+>         _h1_entry_idx = find_h1_entry_idx(df_h1, row["entry_time"])
+>         if _h1_entry_idx is not None:
+>             _plan_h1 = {**_tp_plan, "max_hold_bars": _tp_plan["max_hold_bars"] * 4}
+>             sim = simulate_trade_with_plan_runner_no_time_exit(
+>                 df_local=df_h1, entry_idx=_h1_entry_idx, side=row["side"],
+>                 entry=avg_entry, sl=sl, qty=fill_qty, fee_rate=FEE_RATE,
+>                 grade=row["grade"], plan=_plan_h1,
+>                 use_seq_runner_protection=USE_SEQ_RUNNER_PROTECTION_BASELINE,
+>             )
+>         else:
+>             sim = simulate_trade_with_plan_runner_no_time_exit(
+>                 df_local=df_h4, entry_idx=entry_idx, side=row["side"],
+>                 entry=avg_entry, sl=sl, qty=fill_qty, fee_rate=FEE_RATE,
+>                 grade=row["grade"], plan=_tp_plan,
+>                 use_seq_runner_protection=USE_SEQ_RUNNER_PROTECTION_BASELINE,
+>             )
+>     else:
+>         sim = simulate_trade_with_plan_runner_no_time_exit(
+>             df_local=df_h4, entry_idx=entry_idx, side=row["side"],
+>             entry=avg_entry, sl=sl, qty=fill_qty, fee_rate=FEE_RATE,
+>             grade=row["grade"], plan=_tp_plan,
+>             use_seq_runner_protection=USE_SEQ_RUNNER_PROTECTION_BASELINE,
+>         )
+3331a3703,3739
+>     # ⭐⭐⭐ Step 2 처방 B — Reverse exit 8h cutoff 후처리 ⭐⭐⭐
+>     # 진입 후 8h 이내 반대 H1 CHoCH 발생 시 그 H1 봉 close 기준으로 강제 청산
+>     if USE_REVERSE_EXIT and df_h1 is not None and "bull_choch" in df_h1.columns:
+>         try:
+>             entry_t = pd.to_datetime(row["entry_time"], utc=True)
+>             cutoff_t = entry_t + pd.Timedelta(hours=REVERSE_EXIT_CUTOFF_H)
+>             opp_col = "bear_choch" if row["side"] == "long" else "bull_choch"
+>             _rev_window = df_h1[
+>                 (df_h1["timestamp"] > entry_t) &
+>                 (df_h1["timestamp"] <= cutoff_t) &
+>                 df_h1[opp_col]
+>             ]
+>             if len(_rev_window) > 0:
+>                 rev_t = _rev_window.iloc[0]["timestamp"]
+>                 sim_exit_t = pd.to_datetime(sim["exit_time"], utc=True) if sim.get("exit_time") is not None else None
+>                 # 정상 simulate exit 보다 reverse 가 더 빠를 때만 적용
+>                 if sim_exit_t is None or rev_t < sim_exit_t:
+>                     rev_close = float(_rev_window.iloc[0]["close"])
+>                     if row["side"] == "long":
+>                         raw_pnl = (rev_close - avg_entry) * fill_qty
+>                     else:
+>                         raw_pnl = (avg_entry - rev_close) * fill_qty
+>                     fee_open  = avg_entry  * fill_qty * FEE_RATE
+>                     fee_close = rev_close  * fill_qty * FEE_RATE
+>                     net_pnl_new = raw_pnl - fee_open - fee_close
+>                     r_mul_new = net_pnl_new / max(actual_risk_amount, 1e-9)
+>                     # sim 결과 override
+>                     sim["exit_time"]  = rev_t
+>                     sim["exit_reason"] = "reverse_choch_8h"
+>                     sim["result"]     = "reverse_exit"
+>                     sim["net_pnl"]    = net_pnl_new
+>                     sim["r_multiple"] = r_mul_new
+>                     # hold_bars (H4 단위 근사)
+>                     sim["hold_bars"]  = max(1, int((rev_t - entry_t).total_seconds() / 3600.0 / 4.0))
+>         except Exception:
+>             pass
+> 
+3437a3846,3882
+> 
+>                 # ⭐⭐ Step 1 모니터링: 진입 후 ~ 청산 사이 H1 반대 CHoCH 추적 ⭐⭐
+>                 try:
+>                     _df_h1_mon = candidates_dict[pos["symbol"]].get("df_h1")
+>                     if _df_h1_mon is not None and "bull_choch" in _df_h1_mon.columns:
+>                         _entry_t = pos["entry_time"]
+>                         _exit_t = pos["exit_time"]
+>                         _is_long = (pos["side"] == "long")
+>                         # 진입 직후 ~ 청산 시점 사이 H1 봉
+>                         _h1_window = _df_h1_mon[
+>                             (_df_h1_mon["timestamp"] > _entry_t) &
+>                             (_df_h1_mon["timestamp"] <= _exit_t)
+>                         ]
+>                         # 반대 방향 CHoCH 컬럼 선택
+>                         _opp_col = "bear_choch" if _is_long else "bull_choch"
+>                         _rev = _h1_window[_h1_window[_opp_col]]
+>                         if len(_rev) > 0:
+>                             _first_rev_t = _rev.iloc[0]["timestamp"]
+>                             _bars_to_rev = float((_first_rev_t - _entry_t).total_seconds() / 3600.0)
+>                             pos["bars_to_reverse_choch"] = _bars_to_rev
+>                             # SL과의 timing 비교
+>                             if pos.get("exit_reason") == "stop":
+>                                 # exit_time이 SL hit 시점
+>                                 if _first_rev_t < _exit_t:
+>                                     pos["reverse_choch_before_sl"] = "yes"
+>                                 elif _first_rev_t == _exit_t:
+>                                     pos["reverse_choch_before_sl"] = "tie"
+>                                 else:
+>                                     pos["reverse_choch_before_sl"] = "no"
+>                             else:
+>                                 pos["reverse_choch_before_sl"] = "no_sl"
+>                         else:
+>                             pos["bars_to_reverse_choch"] = np.nan
+>                             pos["reverse_choch_before_sl"] = "no_reverse"
+>                 except Exception:
+>                     pass
+> 
+3591,3592c4036,4111
+<                 # 최종 risk 계산 (Stage 4K 체계: 4J × sentiment_mult)
+<                 risk_pct = risk_pct_base * tier_mult_4e * rp_mult_4e * stage4j_mult * sentiment_mult * risk_multiplier
+---
+>                 # ⭐⭐⭐ Step 2/3 처방 — risk_pct 계산 직전에 PD/Fresh/Wave lookup ⭐⭐⭐
+>                 _pd_aware_mult_apply = 1.0
+>                 _fresh_choch_mult_apply = 1.0
+>                 _weak_setup_mult_apply = 1.0
+>                 _wave_pattern_mult_apply = 1.0
+>                 # wave_state 변수는 outer scope에 미리 init
+>                 _h4ws_q = "unclear"
+>                 _h1ws_q = "unclear"
+>                 _d1ws_q = "unclear"
+> 
+>                 # ⭐ 옵션 1 balance-aware: 자본 작을 때 WEAK 처방 비활성
+>                 _skip_weak_prescriptions = (
+>                     USE_BALANCE_AWARE_WEAK_SKIP and
+>                     balance < WEAK_SKIP_BALANCE_THRESHOLD_USDT
+>                 )
+> 
+>                 if (USE_PD_AWARE_FILTER or USE_FRESH_CHOCH_RISK or
+>                     USE_WEAK_SETUP_FILTER or USE_WAVE_PATTERN_RULES):
+>                     _entry_ts_q = pd.to_datetime(row["entry_time"], utc=True)
+>                     _df_h4_q = candidates_dict[symbol].get("df_h4")
+>                     if _df_h4_q is not None and len(_df_h4_q) > 0:
+>                         _h4_sub_q = _df_h4_q[_df_h4_q["timestamp"] <= _entry_ts_q]
+>                         if len(_h4_sub_q) > 0:
+>                             _h4row_q = _h4_sub_q.iloc[-1]
+>                             # PD-aware: discount SHORT 만 risk × 0.5 (WEAK 처방 — balance-aware 적용)
+>                             if USE_PD_AWARE_FILTER and not _skip_weak_prescriptions:
+>                                 _pd_q = _h4row_q.get("pd_loc", "unknown")
+>                                 _pd_q_str = str(_pd_q) if pd.notna(_pd_q) else "unknown"
+>                                 if _pd_q_str == "discount" and row["side"] == "short":
+>                                     _pd_aware_mult_apply = PD_AWARE_DISCOUNT_SHORT_MULT
+>                             # Fresh CHoCH (현재 False, 미사용)
+>                             if USE_FRESH_CHOCH_RISK and not _skip_weak_prescriptions:
+>                                 _lc_ts_q = _h4row_q.get("last_choch_ts", pd.NaT)
+>                                 if pd.notna(_lc_ts_q):
+>                                     try:
+>                                         _lc_ts_qp = pd.to_datetime(_lc_ts_q, utc=True)
+>                                         _age_q = (_entry_ts_q - _lc_ts_qp).total_seconds() / 3600.0
+>                                         if _age_q < FRESH_CHOCH_AGE_THRESHOLD_H:
+>                                             _fresh_choch_mult_apply = FRESH_CHOCH_RISK_MULT
+>                                     except Exception:
+>                                         pass
+>                             _h4ws_q = str(_h4row_q.get("wave_state", "unclear"))
+> 
+>                     # H1/D1 wave_state lookup
+>                     _df_h1_q = candidates_dict[symbol].get("df_h1")
+>                     if _df_h1_q is not None and len(_df_h1_q) > 0:
+>                         _h1_sub_q = _df_h1_q[_df_h1_q["timestamp"] <= _entry_ts_q]
+>                         if len(_h1_sub_q) > 0:
+>                             _h1ws_q = str(_h1_sub_q.iloc[-1].get("wave_state", "unclear"))
+>                     _df_d1_q = candidates_dict[symbol].get("df_d1")
+>                     if _df_d1_q is not None and len(_df_d1_q) > 0:
+>                         _d1_sub_q = _df_d1_q[_df_d1_q["timestamp"] < _entry_ts_q]
+>                         if len(_d1_sub_q) > 0:
+>                             _d1ws_q = str(_d1_sub_q.iloc[-1].get("wave_state", "unclear"))
+> 
+>                     # 옵션 A: Weak setup blacklist (WEAK 처방 — balance-aware 적용)
+>                     if USE_WEAK_SETUP_FILTER and not _skip_weak_prescriptions:
+>                         _setup_key = (_d1ws_q, _h4ws_q, _h1ws_q, str(row["side"]))
+>                         if _setup_key in WEAK_SETUPS_SET:
+>                             _weak_setup_mult_apply = WEAK_SETUP_RISK_MULT
+> 
+>                     # 옵션 B/C: 일반 패턴 규칙 (skip_weak으로 WEAK만 비활성, STRONG은 항상 적용)
+>                     if USE_WAVE_PATTERN_RULES:
+>                         _wave_pattern_mult_apply = get_wave_pattern_mult(
+>                             _d1ws_q, _h4ws_q, _h1ws_q, str(row["side"]),
+>                             skip_weak=_skip_weak_prescriptions,
+>                         )
+> 
+>                 # 최종 risk 계산 (Stage 4K 체계: 4J × sentiment_mult × Step 2/3 처방)
+>                 # A 와 B 곱셈으로 자연 결합. floor 적용해서 너무 작아지지 않게 보호
+>                 _step3_combined = _weak_setup_mult_apply * _wave_pattern_mult_apply
+>                 _step3_combined = max(_step3_combined, PATTERN_MULT_FLOOR)
+>                 risk_pct = (risk_pct_base * tier_mult_4e * rp_mult_4e * stage4j_mult *
+>                             sentiment_mult * risk_multiplier *
+>                             _pd_aware_mult_apply * _fresh_choch_mult_apply *
+>                             _step3_combined)
+3614a4134
+>                     df_h1=candidates_dict[symbol].get("df_h1"),
+3720a4241,4353
+> 
+>                 # ⭐⭐ Step 1 모니터링: multi-TF trend definition + 5개 진입 정보 ⭐⭐
+>                 _entry_ts_mon = pd.to_datetime(row["entry_time"], utc=True)
+>                 _df_h4_mon = candidates_dict[symbol].get("df_h4")
+>                 _df_h1_mon_e = candidates_dict[symbol].get("df_h1")
+>                 _df_d1_mon = candidates_dict[symbol].get("df_d1")
+> 
+>                 _trend_age_bars = np.nan
+>                 _last_choch_direction = "none"
+>                 _entry_pd_loc = "unknown"
+>                 _h4_ema_state = "neutral"
+>                 _h4_close_vs_ema200 = "neutral"
+>                 _h1_ema_state = "neutral"
+>                 _h1_close_vs_ema200 = "neutral"
+>                 _d1_ema_state_at_entry = "neutral"
+>                 _d1_close_vs_ema200 = "neutral"
+>                 _d1_ema200_slope_pct = np.nan
+>                 # ⭐ Wave-aware regime detection: 3TF wave_state
+>                 _h4_wave_state = "unclear"
+>                 _h1_wave_state = "unclear"
+>                 _d1_wave_state = "unclear"
+> 
+>                 def _classify_ema_align(e20, e50, e200):
+>                     if pd.isna(e20) or pd.isna(e50) or pd.isna(e200):
+>                         return "neutral"
+>                     if e20 > e50 > e200:
+>                         return "bull"
+>                     if e20 < e50 < e200:
+>                         return "bear"
+>                     return "mixed"
+> 
+>                 def _close_vs(ema_v, close_v):
+>                     if pd.isna(ema_v) or pd.isna(close_v):
+>                         return "neutral"
+>                     if close_v > ema_v:
+>                         return "bull"
+>                     if close_v < ema_v:
+>                         return "bear"
+>                     return "neutral"
+> 
+>                 # H4 lookup — 부등식 (entry_ts <= H4 봉 timestamp 의 마지막)
+>                 if _df_h4_mon is not None and len(_df_h4_mon) > 0:
+>                     try:
+>                         _h4_sub = _df_h4_mon[_df_h4_mon["timestamp"] <= _entry_ts_mon]
+>                         if len(_h4_sub) > 0:
+>                             _h4row = _h4_sub.iloc[-1]
+>                             _lc_ts = _h4row.get("last_choch_ts", pd.NaT)
+>                             _lc_dir = _h4row.get("last_choch_dir", "none")
+>                             if pd.notna(_lc_ts):
+>                                 _lc_ts_p = pd.to_datetime(_lc_ts, utc=True)
+>                                 _trend_age_bars = float((_entry_ts_mon - _lc_ts_p).total_seconds() / 3600.0)
+>                             _last_choch_direction = str(_lc_dir) if _lc_dir is not None else "none"
+>                             _pd = _h4row.get("pd_loc", "unknown")
+>                             _entry_pd_loc = str(_pd) if pd.notna(_pd) else "unknown"
+>                             _h4_ema_state = _classify_ema_align(
+>                                 _h4row.get("ema20", np.nan), _h4row.get("ema50", np.nan), _h4row.get("ema200", np.nan)
+>                             )
+>                             _h4_close_vs_ema200 = _close_vs(_h4row.get("ema200", np.nan), _h4row.get("close", np.nan))
+>                             _h4_wave_state = str(_h4row.get("wave_state", "unclear"))
+>                     except Exception:
+>                         pass
+> 
+>                 # H1 lookup — 부등식
+>                 if _df_h1_mon_e is not None and len(_df_h1_mon_e) > 0:
+>                     try:
+>                         _h1_sub = _df_h1_mon_e[_df_h1_mon_e["timestamp"] <= _entry_ts_mon]
+>                         if len(_h1_sub) > 0:
+>                             _h1row = _h1_sub.iloc[-1]
+>                             _h1_ema_state = _classify_ema_align(
+>                                 _h1row.get("ema20", np.nan), _h1row.get("ema50", np.nan), _h1row.get("ema200", np.nan)
+>                             )
+>                             _h1_close_vs_ema200 = _close_vs(_h1row.get("ema200", np.nan), _h1row.get("close", np.nan))
+>                             _h1_wave_state = str(_h1row.get("wave_state", "unclear"))
+>                     except Exception:
+>                         pass
+> 
+>                 # D1 lookup
+>                 if _df_d1_mon is not None and len(_df_d1_mon) > 0:
+>                     try:
+>                         _d1_sub = _df_d1_mon[_df_d1_mon["timestamp"] < _entry_ts_mon]
+>                         if len(_d1_sub) > 0:
+>                             _last_d1 = _d1_sub.iloc[-1]
+>                             _d1_ema_state_at_entry = str(_last_d1.get("ema_state", "neutral"))
+>                             _slope = _last_d1.get("ema200_slope_pct_20d", np.nan)
+>                             _d1_ema200_slope_pct = float(_slope) if pd.notna(_slope) else np.nan
+>                             _d1_close_vs_ema200 = _close_vs(_last_d1.get("ema200", np.nan), _last_d1.get("close", np.nan))
+>                             _d1_wave_state = str(_last_d1.get("wave_state", "unclear"))
+>                     except Exception:
+>                         pass
+> 
+>                 # ⭐ Step 2/3 처방 적용 mult 기록 (ablation/검증용)
+>                 open_positions[idx]["pd_aware_mult"]      = _pd_aware_mult_apply
+>                 open_positions[idx]["fresh_choch_mult"]   = _fresh_choch_mult_apply
+>                 open_positions[idx]["weak_setup_mult"]    = _weak_setup_mult_apply
+>                 open_positions[idx]["wave_pattern_mult"]  = _wave_pattern_mult_apply
+> 
+>                 open_positions[idx]["trend_age_bars"] = _trend_age_bars
+>                 open_positions[idx]["last_choch_direction"] = _last_choch_direction
+>                 open_positions[idx]["entry_pd_loc"] = _entry_pd_loc
+>                 open_positions[idx]["h4_ema_state"] = _h4_ema_state
+>                 open_positions[idx]["h4_close_vs_ema200"] = _h4_close_vs_ema200
+>                 open_positions[idx]["h1_ema_state"] = _h1_ema_state
+>                 open_positions[idx]["h1_close_vs_ema200"] = _h1_close_vs_ema200
+>                 open_positions[idx]["d1_ema_state"] = _d1_ema_state_at_entry
+>                 open_positions[idx]["d1_close_vs_ema200"] = _d1_close_vs_ema200
+>                 open_positions[idx]["d1_ema200_slope_pct"] = _d1_ema200_slope_pct
+>                 # ⭐ Wave-aware regime: 3TF wave_state
+>                 open_positions[idx]["d1_wave_state"] = _d1_wave_state
+>                 open_positions[idx]["h4_wave_state"] = _h4_wave_state
+>                 open_positions[idx]["h1_wave_state"] = _h1_wave_state
+>                 # 청산 시점 placeholder
+>                 open_positions[idx]["bars_to_reverse_choch"] = np.nan
+>                 open_positions[idx]["reverse_choch_before_sl"] = "no_reverse"

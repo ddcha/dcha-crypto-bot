@@ -1,0 +1,146 @@
+{
+  "mode": "live",
+  "loop_interval_sec": 15,
+  "category": "linear",
+  "max_total_risk_pct": 0.04,
+  "symbols": {
+    "BTCUSDT": {
+      "enabled": true,
+      "risk_pct": 0.015
+    },
+    "ETHUSDT": {
+      "enabled": true,
+      "risk_pct": 0.015
+    },
+    "SOLUSDT": {
+      "enabled": true,
+      "risk_pct": 0.01
+    }
+  },
+  "execution": {
+    "orderbook_limit": 50,
+    "tp1_rr": 1.0,
+    "tp1_close_frac": 0.25,
+    "be_after_tp1": true,
+    "poll_fill_timeout_sec": 8,
+    "streamlit_port": 8501
+  },
+  "api": {
+    "demo_api_key": "SNPGlsP53QTzeHOMvn",
+    "demo_api_secret": "aJ0ABjZl0zggnPSWO0bHGgrQjR8kCsVBIy7S",
+    "live_api_key": "BbtktIYfSlW3ymodPc",
+    "live_api_secret": "gsiMwhOCn8JgUMvyOYeSxjyl4XUSMf85MhvL"
+  },
+  "portfolio": {
+    "max_open_positions": 9,
+    "risk_multiplier": 1.0
+  },
+  "protection": {
+    "position_management_enabled": true,
+    "move_be_at_1r": true,
+    "tp1_rr": 1.0,
+    "tp1_close_frac": 0.5,
+    "tp2_rr": 2.0,
+    "tp2_close_frac": 0.3,
+    "runner_close_frac": 0.2,
+    "runner_enabled": true,
+    "runner_trigger_rr": 3.0,
+    "runner_trailing_enabled": true,
+    "runner_trail_start_lock_rr": 1.0,
+    "runner_trail_step_rr": 1.0,
+    "runner_trail_lock_increment_rr": 0.5,
+    "runner_lifecycle_enabled": true,
+    "runner_fast_2r_bars_max": 3,
+    "runner_above_2r_bars_min": 3,
+    "runner_max_rr_after_2r_min": 3.0,
+    "runner_candidate_min_conds": 2,
+    "runner_post_filter_enabled": true,
+    "runner_post_filter_max_rr_after_2r": 1.5,
+    "runner_protect_locked_r": 0.3,
+    "runner_protect_only_if_be_moved": true,
+    "disable_time_exit_for_runner": true
+  },
+  "assets": {
+    "BTCUSDT": {
+      "enabled": true,
+      "risk_pct": 0.022000000000000002,
+      "qty_step": 0.001,
+      "min_order_qty": 0.001,
+      "qty_decimals": 3,
+      "allow_long": true,
+      "allow_short": true
+    },
+    "ETHUSDT": {
+      "enabled": true,
+      "risk_pct": 0.015,
+      "qty_step": 0.01,
+      "min_order_qty": 0.01,
+      "qty_decimals": 2,
+      "allow_long": true,
+      "allow_short": true
+    },
+    "SOLUSDT": {
+      "enabled": true,
+      "risk_pct": 0.01,
+      "qty_step": 0.1,
+      "min_order_qty": 0.1,
+      "qty_decimals": 1,
+      "allow_long": true,
+      "allow_short": true
+    },
+    "XRPUSDT": {
+      "enabled": true,
+      "risk_pct": 0.008,
+      "qty_step": 1.0,
+      "min_order_qty": 1.0,
+      "qty_decimals": 0,
+      "allow_long": true,
+      "allow_short": true
+    },
+    "DOGEUSDT": {
+      "enabled": true,
+      "risk_pct": 0.008,
+      "qty_step": 1.0,
+      "min_order_qty": 1.0,
+      "qty_decimals": 0,
+      "allow_long": true,
+      "allow_short": true
+    },
+    "AVAXUSDT": {
+      "enabled": true,
+      "risk_pct": 0.009000000000000001,
+      "qty_step": 0.1,
+      "min_order_qty": 0.1,
+      "qty_decimals": 1,
+      "allow_long": true,
+      "allow_short": true
+    },
+    "LINKUSDT": {
+      "enabled": true,
+      "risk_pct": 0.008,
+      "qty_step": 0.1,
+      "min_order_qty": 0.1,
+      "qty_decimals": 1,
+      "allow_long": true,
+      "allow_short": true
+    },
+    "BNBUSDT": {
+      "enabled": true,
+      "risk_pct": 0.012,
+      "qty_step": 0.01,
+      "min_order_qty": 0.01,
+      "qty_decimals": 2,
+      "allow_long": true,
+      "allow_short": true
+    },
+    "ADAUSDT": {
+      "enabled": true,
+      "risk_pct": 0.008,
+      "qty_step": 1.0,
+      "min_order_qty": 1.0,
+      "qty_decimals": 0,
+      "allow_long": true,
+      "allow_short": true
+    }
+  }
+}

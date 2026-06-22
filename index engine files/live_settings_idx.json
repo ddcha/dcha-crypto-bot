@@ -1,0 +1,123 @@
+{
+  "mode": "demo",
+  "api": {
+    "demo_app_key": "PSjcGvTqHodVwr2k8LmBzTx1hDLPJPfZZxtU",
+    "demo_app_secret": "8ajxL/0Zn1gEmwWlh6GdjYOX+OcJchJTSs9hfjajCX+fKdF29M9HOyztJv0o032wqzHkN8H+n1E2RwIH08r7zaJRVz+BlBTWVCNSbdYdJTfOPX26lqZJ06ypa7j/FhK0kdhuUT2/jP/BuwRAXm5UWx85IUYVrfrvzklHQDfPBb6F5fTJ4V8=",
+    "live_app_key": "",
+    "live_app_secret": "",
+    "demo_account_no": "50185134",
+    "live_account_no": "",
+    "product_code": "08",
+    "hts_id": ""
+  },
+  "portfolio": {
+    "max_open_positions": 8,
+    "risk_multiplier": 1.0,
+    "manual_balance_usd": 400000.0
+  },
+  "execution": {
+    "orderbook_limit": 50,
+    "poll_fill_timeout_sec": 8
+  },
+  "protection": {
+    "position_management_enabled": true,
+    "move_be_at_1r": true,
+    "runner_trailing_enabled": true,
+    "runner_trail_start_lock_rr": 1.0,
+    "runner_trail_step_rr": 1.0,
+    "runner_trail_lock_increment_rr": 0.5,
+    "runner_lifecycle_enabled": true,
+    "runner_fast_2r_bars_max": 3,
+    "runner_above_2r_bars_min": 3,
+    "runner_max_rr_after_2r_min": 3.0,
+    "runner_candidate_min_conds": 2,
+    "runner_post_filter_enabled": true,
+    "runner_post_filter_max_rr_after_2r": 1.5,
+    "runner_protect_locked_r": 0.3,
+    "runner_protect_only_if_be_moved": true,
+    "disable_time_exit_for_runner": true
+  },
+  "assets": {
+    "NQ": {
+      "enabled": true,
+      "risk_pct": 0.01,
+      "qty_step": 1.0,
+      "min_order_qty": 1.0,
+      "qty_decimals": 0,
+      "allow_long": true,
+      "allow_short": true
+    },
+    "ES": {
+      "enabled": true,
+      "risk_pct": 0.01,
+      "qty_step": 1.0,
+      "min_order_qty": 1.0,
+      "qty_decimals": 0,
+      "allow_long": true,
+      "allow_short": true
+    },
+    "YM": {
+      "enabled": true,
+      "risk_pct": 0.01,
+      "qty_step": 1.0,
+      "min_order_qty": 1.0,
+      "qty_decimals": 0,
+      "allow_long": true,
+      "allow_short": true
+    },
+    "RTY": {
+      "enabled": true,
+      "risk_pct": 0.01,
+      "qty_step": 1.0,
+      "min_order_qty": 1.0,
+      "qty_decimals": 0,
+      "allow_long": true,
+      "allow_short": true
+    },
+    "NKD": {
+      "enabled": true,
+      "risk_pct": 0.01,
+      "qty_step": 1.0,
+      "min_order_qty": 1.0,
+      "qty_decimals": 0,
+      "allow_long": true,
+      "allow_short": true
+    },
+    "TPX": {
+      "enabled": true,
+      "risk_pct": 0.01,
+      "qty_step": 1.0,
+      "min_order_qty": 1.0,
+      "qty_decimals": 0,
+      "allow_long": true,
+      "allow_short": true
+    },
+    "FTSE": {
+      "enabled": true,
+      "risk_pct": 0.01,
+      "qty_step": 1.0,
+      "min_order_qty": 1.0,
+      "qty_decimals": 0,
+      "allow_long": true,
+      "allow_short": true
+    },
+    "HSI": {
+      "enabled": true,
+      "risk_pct": 0.01,
+      "qty_step": 1.0,
+      "min_order_qty": 1.0,
+      "qty_decimals": 0,
+      "allow_long": true,
+      "allow_short": true
+    },
+    "TWII": {
+      "enabled": true,
+      "risk_pct": 0.01,
+      "qty_step": 1.0,
+      "min_order_qty": 1.0,
+      "qty_decimals": 0,
+      "allow_long": true,
+      "allow_short": true
+    }
+  }
+}

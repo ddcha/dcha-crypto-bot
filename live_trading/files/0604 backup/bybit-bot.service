@@ -1,0 +1,47 @@
+[Unit]
+Description=Bybit SMC v1.9b Trading Bot
+After=network-online.target
+Wants=network-online.target
+StartLimitBurst=3
+StartLimitIntervalSec=600
+
+[Service]
+Type=simple
+User=linuxuser
+Group=linuxuser
+WorkingDirectory=/home/linuxuser/bybit_bot
+
+# ★★★ [PATCHED May 19 — A 패치] ★★★
+# 이전: ExecStart=...python /home/linuxuser/bybit_bot/main.py
+# 변경: ExecStart=...python /home/linuxuser/bybit_bot/engine_watchdog.py
+#
+# 효과:
+#  - systemd가 watchdog만 직접 spawn
+#  - watchdog가 main.py를 자식으로 띄움 → 자동으로 systemd control-group에 포함
+#  - systemctl stop → KillMode=control-group이 watchdog + main.py 함께 종료
+#  - watchdog가 죽으면 systemd가 자동 재시작 (안전망 한 겹 더)
+#  - 5/15~5/19 좀비 100개+ 같은 누적 사고 절대 불가능
+#    (모든 main.py가 systemd control-group 안에 있으므로 systemctl stop 한 번에 정리)
+ExecStart=/home/linuxuser/bybit_bot/venv/bin/python /home/linuxuser/bybit_bot/engine_watchdog.py
+
+# control-group 단위 kill — watchdog + 자식 main.py 모두 함께 종료
+KillMode=control-group
+KillSignal=SIGTERM
+SendSIGKILL=yes
+TimeoutStopSec=30
+FinalKillSignal=SIGKILL
+Delegate=yes
+
+# watchdog가 비정상 종료 시 자동 재시작 (15초 후)
+Restart=on-failure
+RestartSec=15s
+
+# MemoryMax=2000M
+CPUQuota=80%
+
+StandardOutput=journal
+StandardError=journal
+Environment="PYTHONUNBUFFERED=1"
+
+[Install]
+WantedBy=multi-user.target

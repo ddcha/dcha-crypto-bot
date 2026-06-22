@@ -1,0 +1,26 @@
+{
+  "system": {
+    "trading_enabled": true,
+    "kill_switch": false,
+    "emergency_close_all": false,
+    "last_emergency_close_all_at": null,
+    "last_loop_time": "2026-04-30T05:10:38.626472+00:00",
+    "last_error": null,
+    "engine_running": false,
+    "engine_pid": null,
+    "engine_started_at": null,
+    "engine_stopped_at": null,
+    "stop_requested": false,
+    "last_action": "LIGHT SLEEP - 5s",
+    "last_system_check": {},
+    "watchdog_enabled": true,
+    "watchdog_running": true,
+    "watchdog_pid": 25780,
+    "watchdog_last_check": "2026-04-30T05:05:19.003280+00:00"
+  },
+  "symbols": {},
+  "managed_positions": {},
+  "latest_open_positions": {},
+  "exchange_positions": {},
+  "engine_positions_view": {}
+}

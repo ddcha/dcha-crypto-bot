@@ -1,0 +1,743 @@
+{
+  "system": {
+    "trading_enabled": true,
+    "kill_switch": false,
+    "emergency_close_all": false,
+    "last_emergency_close_all_at": null,
+    "last_loop_time": "2026-05-02T23:10:37.903660+00:00",
+    "last_error": null,
+    "engine_running": true,
+    "engine_pid": 67594,
+    "engine_started_at": "2026-05-02T14:16:53.246916+00:00",
+    "engine_stopped_at": null,
+    "stop_requested": false,
+    "last_action": "SIGNAL SCAN - DOGEUSDT",
+    "last_system_check": {},
+    "performance_snapshots": {
+      "daily": {
+        "2026-05-02": 2761.08231981
+      },
+      "monthly": {
+        "2026-05": 2761.08231981
+      },
+      "yearly": {
+        "2026": 2761.08231981
+      }
+    },
+    "watchdog_enabled": true,
+    "watchdog_running": true,
+    "watchdog_pid": 48961,
+    "watchdog_last_check": "2026-05-02T18:11:51.843470+00:00"
+  },
+  "symbols": {
+    "BTCUSDT": {
+      "last_signal_timestamp": null,
+      "last_signal_side": null,
+      "last_signal_payload": null,
+      "last_order_signal_timestamp": null,
+      "last_order_side": null,
+      "last_order_response": null,
+      "last_fill_snapshot": null,
+      "last_tp1_order_response": null,
+      "last_tp1_fill_snapshot": null
+    },
+    "ETHUSDT": {
+      "last_signal_timestamp": "2026-05-02 16:00:00+00:00",
+      "last_signal_side": "Sell",
+      "last_signal_payload": {
+        "should_enter": true,
+        "timestamp": "2026-05-02 16:00:00+00:00",
+        "h4_closed_index": 998,
+        "side": "Sell",
+        "position_side": "short",
+        "entry": 2321.87,
+        "base_entry": 2340.566,
+        "entry_refined": false,
+        "refined_entry_px": null,
+        "refine_tag": "",
+        "sl": 2343.473085714286,
+        "qty": 4.237608533446068,
+        "notional": 9839.17612555242,
+        "risk_per_unit": 21.603085714285953,
+        "score": 13.25,
+        "base_score": 12.25,
+        "fresh_reasons": [
+          "fresh_bear_ob"
+        ],
+        "grade": "B",
+        "run_potential": 1,
+        "run_tags": "fvg",
+        "tp_plan_name": "base",
+        "tp_plan": {
+          "name": "base",
+          "targets": [
+            [
+              1.0,
+              0.25
+            ],
+            [
+              2.0,
+              0.2
+            ],
+            [
+              3.0,
+              0.15
+            ]
+          ],
+          "runner_frac": 0.4,
+          "trail_activate_rr": 3.0,
+          "be_after_rr": 1.0,
+          "max_hold_bars": 12
+        },
+        "expansion_state": false,
+        "reasons": "sweep,bear_disp,valid_bear_ob,fresh_bear_ob,strong_disp_ob,sized_bear_ob,valid_bear_fvg,sized_bear_fvg,early_bear_fvg,fresh_bear_fvg",
+        "zone_low": 2284.91,
+        "zone_high": 2346.75,
+        "sweep_ref": 2341.88,
+        "trend": "neutral",
+        "market_state": "bear_transition",
+        "h1_choch_confirm": false,
+        "h1_choch_time": "NaT",
+        "tier": "ALPHA_MAX",
+        "tier_mult": 2.5,
+        "tier_mult_raw": 2.5,
+        "rp_action": "rp_pass",
+        "effective_notional_cap": 999.0,
+        "tier_pre_total": 5,
+        "tier_sweep_count": 4,
+        "tier_fvg_count": 0,
+        "tier_ob_count": 1,
+        "tier_wick_ratio_5": 0.33759398496240206,
+        "risk_pct_base": 0.015,
+        "risk_pct_tier_adjusted": 0.0375,
+        "stage4j_mult": 1.0,
+        "stage4j_label": "DEFAULT",
+        "sentiment_mult": 1.0,
+        "sentiment_label": "no_data",
+        "atoms_dict": {
+          "a_sweep": false,
+          "a_volume": true,
+          "a_pre_total_ge4": true,
+          "a_sweep_count_2_4": true,
+          "a_score_ge13": true,
+          "a_wick_le_q1": false,
+          "a_pre_total_ge1": true,
+          "a_trend_align": false,
+          "a_mss": false,
+          "a_fvg": true,
+          "a_overlap": false,
+          "a_room": false
+        }
+      },
+      "last_order_signal_timestamp": "2026-05-02 16:00:00+00:00",
+      "last_order_side": "Sell",
+      "last_order_response": {
+        "retCode": 0,
+        "retMsg": "OK",
+        "result": {
+          "orderId": "8f244b6c-5dfa-4875-afeb-50520f4dc6ae",
+          "orderLinkId": ""
+        },
+        "retExtInfo": {},
+        "time": 1777752058868
+      },
+      "last_fill_snapshot": {
+        "symbol": "ETHUSDT",
+        "side": "Sell",
+        "qty": 3.1,
+        "avg_price": 2308.97525806,
+        "raw": {
+          "symbol": "ETHUSDT",
+          "leverage": "10",
+          "breakEvenPrice": "2306.43678142",
+          "autoAddMargin": 0,
+          "avgPrice": "2308.97525806",
+          "liqPrice": "2527.23",
+          "riskLimitValue": "900000",
+          "takeProfit": "",
+          "positionValue": "7158.334",
+          "isReduceOnly": false,
+          "positionIMByMp": "720.1128131",
+          "tpslMode": "Full",
+          "riskId": 11,
+          "trailingStop": "0",
+          "liqPriceByMp": "2527.23",
+          "unrealisedPnl": "-0.5107",
+          "markPrice": "2309.14",
+          "adlRankIndicator": 2,
+          "cumRealisedPnl": "-63.21814904",
+          "positionMM": "40.12215298",
+          "createdTime": "1763729789505",
+          "positionIdx": 0,
+          "openTime": 1777752058871,
+          "positionIM": "720.1128131",
+          "positionMMByMp": "40.12215298",
+          "seq": 383652742150,
+          "updatedTime": "1777752058871",
+          "side": "Sell",
+          "bustPrice": "",
+          "positionBalance": "720.1128131",
+          "leverageSysUpdatedTime": "",
+          "curRealisedPnl": "-3.93680287",
+          "size": "3.1",
+          "positionStatus": "Normal",
+          "mmrSysUpdatedTime": "",
+          "stopLoss": "",
+          "tradeMode": 0,
+          "sessionAvgPrice": ""
+        },
+        "response": {
+          "retCode": 0,
+          "retMsg": "OK",
+          "result": {
+            "nextPageCursor": "ETHUSDT%2C1777752058871%2C0",
+            "category": "linear",
+            "list": [
+              {
+                "symbol": "ETHUSDT",
+                "leverage": "10",
+                "breakEvenPrice": "2306.43678142",
+                "autoAddMargin": 0,
+                "avgPrice": "2308.97525806",
+                "liqPrice": "2527.23",
+                "riskLimitValue": "900000",
+                "takeProfit": "",
+                "positionValue": "7158.334",
+                "isReduceOnly": false,
+                "positionIMByMp": "720.1128131",
+                "tpslMode": "Full",
+                "riskId": 11,
+                "trailingStop": "0",
+                "liqPriceByMp": "2527.23",
+                "unrealisedPnl": "-0.5107",
+                "markPrice": "2309.14",
+                "adlRankIndicator": 2,
+                "cumRealisedPnl": "-63.21814904",
+                "positionMM": "40.12215298",
+                "createdTime": "1763729789505",
+                "positionIdx": 0,
+                "openTime": 1777752058871,
+                "positionIM": "720.1128131",
+                "positionMMByMp": "40.12215298",
+                "seq": 383652742150,
+                "updatedTime": "1777752058871",
+                "side": "Sell",
+                "bustPrice": "",
+                "positionBalance": "720.1128131",
+                "leverageSysUpdatedTime": "",
+                "curRealisedPnl": "-3.93680287",
+                "size": "3.1",
+                "positionStatus": "Normal",
+                "mmrSysUpdatedTime": "",
+                "stopLoss": "",
+                "tradeMode": 0,
+                "sessionAvgPrice": ""
+              }
+            ]
+          },
+          "retExtInfo": {},
+          "time": 1777752059095
+        }
+      },
+      "last_tp1_order_response": {
+        "retCode": 0,
+        "retMsg": "OK",
+        "result": {
+          "orderId": "135367a0-9d0e-472b-a10a-805de95470fa",
+          "orderLinkId": ""
+        },
+        "retExtInfo": {},
+        "time": 1777752060790
+      },
+      "last_tp1_fill_snapshot": null
+    },
+    "SOLUSDT": {
+      "last_signal_timestamp": null,
+      "last_signal_side": null,
+      "last_signal_payload": null,
+      "last_order_signal_timestamp": null,
+      "last_order_side": null,
+      "last_order_response": null,
+      "last_fill_snapshot": null,
+      "last_tp1_order_response": null,
+      "last_tp1_fill_snapshot": null
+    },
+    "XRPUSDT": {
+      "last_signal_timestamp": null,
+      "last_signal_side": null,
+      "last_signal_payload": null,
+      "last_order_signal_timestamp": null,
+      "last_order_side": null,
+      "last_order_response": null,
+      "last_fill_snapshot": null,
+      "last_tp1_order_response": null,
+      "last_tp1_fill_snapshot": null
+    },
+    "DOGEUSDT": {
+      "last_signal_timestamp": "2026-05-02 16:00:00+00:00",
+      "last_signal_side": null,
+      "last_signal_payload": {
+        "should_enter": false,
+        "reason": "no_valid_signal_on_latest_closed_h4",
+        "timestamp": "2026-05-02 16:00:00+00:00",
+        "candidate_count": 1,
+        "same_side_cooldown": null,
+        "trend": "up",
+        "market_state": "up",
+        "latest_close": 0.10833
+      },
+      "last_order_signal_timestamp": null,
+      "last_order_side": null,
+      "last_order_response": null,
+      "last_fill_snapshot": null,
+      "last_tp1_order_response": null,
+      "last_tp1_fill_snapshot": null
+    },
+    "AVAXUSDT": {
+      "last_signal_timestamp": "2026-05-02 16:00:00+00:00",
+      "last_signal_side": null,
+      "last_signal_payload": {
+        "should_enter": false,
+        "reason": "no_valid_signal_on_latest_closed_h4",
+        "timestamp": "2026-05-02 16:00:00+00:00",
+        "candidate_count": 2,
+        "same_side_cooldown": null,
+        "trend": "down",
+        "market_state": "bull_transition",
+        "latest_close": 9.16
+      },
+      "last_order_signal_timestamp": null,
+      "last_order_side": null,
+      "last_order_response": null,
+      "last_fill_snapshot": null,
+      "last_tp1_order_response": null,
+      "last_tp1_fill_snapshot": null
+    },
+    "LINKUSDT": {
+      "last_signal_timestamp": "2026-05-02 16:00:00+00:00",
+      "last_signal_side": null,
+      "last_signal_payload": {
+        "should_enter": false,
+        "reason": "no_valid_signal_on_latest_closed_h4",
+        "timestamp": "2026-05-02 16:00:00+00:00",
+        "candidate_count": 3,
+        "same_side_cooldown": null,
+        "trend": "neutral",
+        "market_state": "bull_transition",
+        "latest_close": 9.161
+      },
+      "last_order_signal_timestamp": null,
+      "last_order_side": null,
+      "last_order_response": null,
+      "last_fill_snapshot": null,
+      "last_tp1_order_response": null,
+      "last_tp1_fill_snapshot": null
+    },
+    "BNBUSDT": {
+      "last_signal_timestamp": "2026-05-02 16:00:00+00:00",
+      "last_signal_side": null,
+      "last_signal_payload": {
+        "should_enter": false,
+        "reason": "no_valid_signal_on_latest_closed_h4",
+        "timestamp": "2026-05-02 16:00:00+00:00",
+        "candidate_count": 2,
+        "same_side_cooldown": null,
+        "trend": "down",
+        "market_state": "bull_transition",
+        "latest_close": 618.6
+      },
+      "last_order_signal_timestamp": null,
+      "last_order_side": null,
+      "last_order_response": null,
+      "last_fill_snapshot": null,
+      "last_tp1_order_response": null,
+      "last_tp1_fill_snapshot": null
+    },
+    "ADAUSDT": {
+      "last_signal_timestamp": "2026-05-02 16:00:00+00:00",
+      "last_signal_side": null,
+      "last_signal_payload": {
+        "should_enter": false,
+        "reason": "no_valid_signal_on_latest_closed_h4",
+        "timestamp": "2026-05-02 16:00:00+00:00",
+        "candidate_count": 1,
+        "same_side_cooldown": null,
+        "trend": "down",
+        "market_state": "down",
+        "latest_close": 0.251
+      },
+      "last_order_signal_timestamp": null,
+      "last_order_side": null,
+      "last_order_response": null,
+      "last_fill_snapshot": null,
+      "last_tp1_order_response": null,
+      "last_tp1_fill_snapshot": null
+    }
+  },
+  "managed_positions": {
+    "XRPUSDT": {
+      "symbol": "XRPUSDT",
+      "side": "Sell",
+      "entry_price": 1.389,
+      "expected_entry_price": 1.389,
+      "slippage_pct": null,
+      "initial_sl": 1.4071639999999999,
+      "current_stop": 1.4071639999999999,
+      "risk_per_unit": 0.018163999999999847,
+      "original_qty": 1477.0,
+      "remaining_qty_est": 1477.0,
+      "signal_ts": "2026-05-01 12:00:00+00:00",
+      "tp_plan_name": "base",
+      "tp_plan": {
+        "name": "base",
+        "targets": [
+          [
+            1.0,
+            0.25
+          ],
+          [
+            2.0,
+            0.2
+          ],
+          [
+            3.0,
+            0.15
+          ]
+        ],
+        "runner_frac": 0.4,
+        "trail_activate_rr": 3.0,
+        "be_after_rr": 1.0,
+        "max_hold_bars": 12
+      },
+      "tp_targets": [
+        {
+          "name": "tp1",
+          "rr": 1.0,
+          "frac": 0.25,
+          "done": false
+        },
+        {
+          "name": "tp2",
+          "rr": 2.0,
+          "frac": 0.2,
+          "done": false
+        },
+        {
+          "name": "tp3",
+          "rr": 3.0,
+          "frac": 0.15,
+          "done": false
+        }
+      ],
+      "tp1_done": false,
+      "tp2_done": false,
+      "tp3_done": false,
+      "be_moved": false,
+      "runner_active": false,
+      "runner_announced": false,
+      "tp1_exchange_order_id": "e61730f8-8a67-4d11-a580-6baf99f087c9",
+      "tp1_exchange_price": 1.3708,
+      "tp1_exchange_qty": 369.0,
+      "tp1_exchange_armed": true,
+      "tp1_exchange_done": false,
+      "recovered": true,
+      "management_enabled": true,
+      "awaiting_fill_sync": false,
+      "entry_source": "recovered_from_trade_log",
+      "last_sync_at": "2026-05-02T23:09:40.308485+00:00",
+      "tier": "",
+      "tier_mult": null,
+      "tier_pre_total": null,
+      "tier_sweep_count": null,
+      "tier_wick_ratio_5": null,
+      "risk_pct_base": null,
+      "risk_pct_tier_adjusted": null,
+      "run_potential": null,
+      "rp_action": "",
+      "stage4j_mult": 1.0,
+      "stage4j_label": "DEFAULT",
+      "sentiment_mult": 1.0,
+      "sentiment_label": "no_data",
+      "rr_bars_to_2r": null,
+      "rr_bars_spent_above_2r": 0,
+      "rr_max_rr_after_2r": 0.0,
+      "rr_cond_count_final": 0,
+      "runner_candidate_2of3": false,
+      "post_2of3_apply_ok": false,
+      "runner_protected": false,
+      "runner_stats_last_h4_ts": "2026-05-02 16:00:00+00:00",
+      "runner_stats_last_rr": 0.03303237172428644,
+      "runner_state_badge": "IDLE",
+      "time_exit_disabled_for_runner": false
+    },
+    "SOLUSDT": {
+      "symbol": "SOLUSDT",
+      "side": "Sell",
+      "entry_price": 83.48,
+      "expected_entry_price": 83.48,
+      "slippage_pct": null,
+      "initial_sl": 85.52508571428572,
+      "current_stop": 85.52508571428572,
+      "risk_per_unit": 2.045085714285719,
+      "original_qty": 26.0,
+      "remaining_qty_est": 26.0,
+      "signal_ts": "2026-04-29 20:00:00+00:00",
+      "tp_plan_name": "expansion",
+      "tp_plan": {
+        "name": "expansion",
+        "targets": [
+          [
+            1.0,
+            0.15
+          ],
+          [
+            2.0,
+            0.15
+          ],
+          [
+            3.0,
+            0.1
+          ]
+        ],
+        "runner_frac": 0.6,
+        "trail_activate_rr": 4.0,
+        "be_after_rr": 1.5,
+        "max_hold_bars": 20
+      },
+      "tp_targets": [
+        {
+          "name": "tp1",
+          "rr": 1.0,
+          "frac": 0.15,
+          "done": false
+        },
+        {
+          "name": "tp2",
+          "rr": 2.0,
+          "frac": 0.15,
+          "done": false
+        },
+        {
+          "name": "tp3",
+          "rr": 3.0,
+          "frac": 0.1,
+          "done": false
+        }
+      ],
+      "tp1_done": false,
+      "tp2_done": false,
+      "tp3_done": false,
+      "be_moved": false,
+      "runner_active": false,
+      "runner_announced": false,
+      "tp1_exchange_order_id": "b0ffa264-6b61-43a8-8b34-db88ad7233aa",
+      "tp1_exchange_price": 81.43,
+      "tp1_exchange_qty": 3.9,
+      "tp1_exchange_armed": true,
+      "tp1_exchange_done": false,
+      "recovered": true,
+      "management_enabled": true,
+      "awaiting_fill_sync": false,
+      "entry_source": "recovered_from_trade_log",
+      "last_sync_at": "2026-05-02T23:09:40.308525+00:00",
+      "tier": "",
+      "tier_mult": null,
+      "tier_pre_total": null,
+      "tier_sweep_count": null,
+      "tier_wick_ratio_5": null,
+      "risk_pct_base": null,
+      "risk_pct_tier_adjusted": null,
+      "run_potential": null,
+      "rp_action": "",
+      "stage4j_mult": 1.0,
+      "stage4j_label": "DEFAULT",
+      "sentiment_mult": 1.0,
+      "sentiment_label": "no_data",
+      "rr_bars_to_2r": null,
+      "rr_bars_spent_above_2r": 0,
+      "rr_max_rr_after_2r": 0.0,
+      "rr_cond_count_final": 0,
+      "runner_candidate_2of3": false,
+      "post_2of3_apply_ok": false,
+      "runner_protected": false,
+      "runner_stats_last_h4_ts": "2026-05-02 16:00:00+00:00",
+      "runner_stats_last_rr": -0.20537036519601032,
+      "runner_state_badge": "IDLE",
+      "time_exit_disabled_for_runner": false
+    }
+  },
+  "latest_open_positions": {
+    "XRPUSDT": {
+      "side": "Sell",
+      "qty": 1477.0,
+      "avg_entry_price": 1.389,
+      "mark_price": 1.3923,
+      "liq_price": 1.5202,
+      "position_value": 2056.4271,
+      "unrealised_pnl": -4.8741,
+      "updated_at": "2026-05-02T23:09:40.308546+00:00"
+    },
+    "SOLUSDT": {
+      "side": "Sell",
+      "qty": 26.0,
+      "avg_entry_price": 83.48,
+      "mark_price": 84.28,
+      "liq_price": 91.37,
+      "position_value": 2191.28,
+      "unrealised_pnl": -20.8,
+      "updated_at": "2026-05-02T23:09:40.308557+00:00"
+    }
+  },
+  "exchange_positions": {
+    "XRPUSDT": {
+      "side": "Sell",
+      "qty": 1477.0,
+      "avg_entry_price": 1.389,
+      "mark_price": 1.3923,
+      "liq_price": 1.5202,
+      "position_value": 2056.4271,
+      "unrealised_pnl": -4.8741,
+      "updated_at": "2026-05-02T23:09:40.308546+00:00"
+    },
+    "SOLUSDT": {
+      "side": "Sell",
+      "qty": 26.0,
+      "avg_entry_price": 83.48,
+      "mark_price": 84.28,
+      "liq_price": 91.37,
+      "position_value": 2191.28,
+      "unrealised_pnl": -20.8,
+      "updated_at": "2026-05-02T23:09:40.308557+00:00"
+    }
+  },
+  "engine_positions_view": {
+    "XRPUSDT": {
+      "side": "Sell",
+      "entry_price": 1.389,
+      "expected_entry_price": 1.389,
+      "slippage_pct": null,
+      "initial_sl": 1.4071639999999999,
+      "current_stop": 1.4071639999999999,
+      "risk_per_unit": 0.018163999999999847,
+      "original_qty": 1477.0,
+      "remaining_qty_est": 1477.0,
+      "tp_plan_name": "base",
+      "tp_targets": [
+        {
+          "name": "tp1",
+          "rr": 1.0,
+          "frac": 0.25,
+          "done": false
+        },
+        {
+          "name": "tp2",
+          "rr": 2.0,
+          "frac": 0.2,
+          "done": false
+        },
+        {
+          "name": "tp3",
+          "rr": 3.0,
+          "frac": 0.15,
+          "done": false
+        }
+      ],
+      "tp1_done": false,
+      "tp2_done": false,
+      "tp3_done": false,
+      "be_moved": false,
+      "runner_active": false,
+      "runner_candidate_2of3": false,
+      "post_2of3_apply_ok": false,
+      "runner_protected": false,
+      "runner_state_badge": "IDLE",
+      "rr_bars_to_2r": null,
+      "rr_bars_spent_above_2r": 0,
+      "rr_max_rr_after_2r": 0.0,
+      "rr_cond_count_final": 0,
+      "time_exit_disabled_for_runner": false,
+      "tp1_exchange_order_id": "e61730f8-8a67-4d11-a580-6baf99f087c9",
+      "tp1_exchange_price": 1.3708,
+      "tp1_exchange_qty": 369.0,
+      "tp1_exchange_armed": true,
+      "tp1_exchange_done": false,
+      "recovered": true,
+      "management_enabled": true,
+      "awaiting_fill_sync": false,
+      "entry_source": "recovered_from_trade_log",
+      "signal_ts": "2026-05-01 12:00:00+00:00",
+      "last_sync_at": "2026-05-02T23:09:40.308485+00:00"
+    },
+    "SOLUSDT": {
+      "side": "Sell",
+      "entry_price": 83.48,
+      "expected_entry_price": 83.48,
+      "slippage_pct": null,
+      "initial_sl": 85.52508571428572,
+      "current_stop": 85.52508571428572,
+      "risk_per_unit": 2.045085714285719,
+      "original_qty": 26.0,
+      "remaining_qty_est": 26.0,
+      "tp_plan_name": "expansion",
+      "tp_targets": [
+        {
+          "name": "tp1",
+          "rr": 1.0,
+          "frac": 0.15,
+          "done": false
+        },
+        {
+          "name": "tp2",
+          "rr": 2.0,
+          "frac": 0.15,
+          "done": false
+        },
+        {
+          "name": "tp3",
+          "rr": 3.0,
+          "frac": 0.1,
+          "done": false
+        }
+      ],
+      "tp1_done": false,
+      "tp2_done": false,
+      "tp3_done": false,
+      "be_moved": false,
+      "runner_active": false,
+      "runner_candidate_2of3": false,
+      "post_2of3_apply_ok": false,
+      "runner_protected": false,
+      "runner_state_badge": "IDLE",
+      "rr_bars_to_2r": null,
+      "rr_bars_spent_above_2r": 0,
+      "rr_max_rr_after_2r": 0.0,
+      "rr_cond_count_final": 0,
+      "time_exit_disabled_for_runner": false,
+      "tp1_exchange_order_id": "b0ffa264-6b61-43a8-8b34-db88ad7233aa",
+      "tp1_exchange_price": 81.43,
+      "tp1_exchange_qty": 3.9,
+      "tp1_exchange_armed": true,
+      "tp1_exchange_done": false,
+      "recovered": true,
+      "management_enabled": true,
+      "awaiting_fill_sync": false,
+      "entry_source": "recovered_from_trade_log",
+      "signal_ts": "2026-04-29 20:00:00+00:00",
+      "last_sync_at": "2026-05-02T23:09:40.308525+00:00"
+    }
+  },
+  "symbol_states": {
+    "ADAUSDT": {
+      "last_exit_time": "2026-05-02T20:00:03.934140+00:00",
+      "last_exit_side": "Sell"
+    },
+    "AVAXUSDT": {
+      "last_exit_time": "2026-05-02T21:37:59.090157+00:00",
+      "last_exit_side": "Sell"
+    },
+    "ETHUSDT": {
+      "last_exit_time": "2026-05-02T21:41:10.609482+00:00",
+      "last_exit_side": "Sell"
+    }
+  }
+}

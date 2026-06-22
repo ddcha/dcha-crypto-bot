@@ -1,0 +1,2976 @@
+from __future__ import annotations
+
+from typing import Any, Dict, List, Optional, Set, Tuple
+from datetime import datetime, timezone, timedelta
+import numpy as np
+import pandas as pd
+
+# =========================================================
+# Stage 4K BOOST15 시스템 (백테스트 검증 baseline 이식)
+# 백테스트 결과: 1077 trades, PF 2.644, MDD -10.36%, Return 15,797%
+# =========================================================
+
+try:
+    from config import (
+        # 공통/필터
+        USE_VOLUME_FILTER,
+        VOLUME_AVG_WINDOW,
+        VOLUME_SPIKE_MULT,
+        VOLUME_STRICT_MODE,
+        VOLUME_PREV_MULT,
+        WICK_RATIO_5_Q1_THRESHOLD,
+        PRE_ENTRY_LOOKBACK_LTF_BARS,
+        WICK_LOOKBACK_BARS,
+        SWEEP_LOOKBACK_BARS,
+        # 정렬/cap
+        MAX_NOTIONAL_MULT,
+        MAX_NOTIONAL_MULT_SA_FREE,
+        USE_TIER_PRIORITY_SORT,
+        EXCLUDE_RECENT_H1_FOR_TIER,
+        # 1m wick touch
+        USE_1M_WICK_TOUCH,
+        WICK_TOUCH_LOOKBACK_BARS,
+        WICK_TOUCH_MAX_EXIT_FRAC,
+        # SL
+        SL_BUFFER_MULT,
+        # ⭐ Stage 4K Tier 시스템
+        TIER_RISK_MULT_COMMON,
+        ALPHA_MED_RISK_LONG,
+        ALPHA_MED_RISK_SHORT,
+        TIER_CAP_4H,
+        OUT_BEHAVIOR,
+        SCENARIO,
+        SWEEP_RISK_BY_SCENARIO,
+        GEM_LONG_ONLY,
+        ROOM_ONLY_SYMBOL_BLACKLIST,
+        # ⭐ Stage 4K Sentiment
+        SENTIMENT_LOOKBACK_DAYS,
+        SENTIMENT_PREV_OFFSET,
+        SENTIMENT_MIN_SAMPLES,
+        SENTIMENT_BOOSTER_BY_SCENARIO,
+        # RP boost (백테스트 4K 버전)
+        RP_MULT_4H,
+        RP_FILTER_ENABLE,
+        # ⭐ Stage 3 Wave-aware 처방 (옵션 A+B+C + Balance-aware)
+        USE_PD_AWARE_FILTER,
+        PD_AWARE_DISCOUNT_SHORT_MULT,
+        USE_WEAK_SETUP_FILTER,
+        WEAK_SETUP_RISK_MULT,
+        WEAK_SETUPS_SET,
+        USE_WAVE_PATTERN_RULES,
+        PATTERN_MULTS,
+        PATTERN_MULT_FLOOR,
+        PATTERN_MULT_CEILING,
+        USE_BALANCE_AWARE_WEAK_SKIP,
+        WEAK_SKIP_BALANCE_THRESHOLD_USDT,
+    )
+except Exception:
+    # fallback (config import 실패시 기본값)
+    USE_VOLUME_FILTER = True
+    VOLUME_AVG_WINDOW = 20
+    VOLUME_SPIKE_MULT = 1.1
+    VOLUME_STRICT_MODE = False
+    VOLUME_PREV_MULT = 1.5
+    WICK_RATIO_5_Q1_THRESHOLD = 0.2300
+    PRE_ENTRY_LOOKBACK_LTF_BARS = 8
+    WICK_LOOKBACK_BARS = 5
+    SWEEP_LOOKBACK_BARS = 5
+    MAX_NOTIONAL_MULT = 3.0
+    MAX_NOTIONAL_MULT_SA_FREE = 999.0
+    USE_TIER_PRIORITY_SORT = True
+    EXCLUDE_RECENT_H1_FOR_TIER = 0
+    USE_1M_WICK_TOUCH = True
+    WICK_TOUCH_LOOKBACK_BARS = 5
+    WICK_TOUCH_MAX_EXIT_FRAC = 0.30
+    SL_BUFFER_MULT = 0.08
+    TIER_RISK_MULT_COMMON = {
+        "ALPHA_MAX": 2.0, "ALPHA_HIGH": 1.5, "ALPHA_MED": 1.2,
+        "COMPLETE_OUT": 1.0, "SKIP_MSS": 0.0,
+    }
+    ALPHA_MED_RISK_LONG = 0.8
+    ALPHA_MED_RISK_SHORT = 1.2
+    TIER_CAP_4H = {
+        "ALPHA_MAX": 999.0, "ALPHA_HIGH": 999.0, "ALPHA_MED": 999.0,
+        "SWEEP_GEM": 3.0, "SWEEP_ROOM_FVG": 3.0, "SWEEP_ROOM_ONLY": 3.0,
+        "COMPLETE_OUT": 3.0, "SKIP_MSS": 3.0,
+    }
+    OUT_BEHAVIOR = "skip"
+    SCENARIO = "BOOST15"
+    SWEEP_RISK_BY_SCENARIO = {
+        "BOOST15": {"SWEEP_GEM": 1.0, "SWEEP_ROOM_FVG": 1.0, "SWEEP_ROOM_ONLY": 1.0},
+        "BOOST25": {"SWEEP_GEM": 1.0, "SWEEP_ROOM_FVG": 1.0, "SWEEP_ROOM_ONLY": 1.0},
+        "BOOST35": {"SWEEP_GEM": 1.0, "SWEEP_ROOM_FVG": 1.0, "SWEEP_ROOM_ONLY": 1.0},
+    }
+    GEM_LONG_ONLY = True
+    ROOM_ONLY_SYMBOL_BLACKLIST = {"BTCUSDT", "SOLUSDT", "BNBUSDT", "LINKUSDT"}
+    SENTIMENT_LOOKBACK_DAYS = 7
+    SENTIMENT_PREV_OFFSET = 7
+    SENTIMENT_MIN_SAMPLES = 2
+    SENTIMENT_BOOSTER_BY_SCENARIO = {
+        "BOOST15": {"BOOST": 1.5, "CUT": 0.5},
+        "BOOST25": {"BOOST": 2.5, "CUT": 0.5},
+        "BOOST35": {"BOOST": 3.5, "CUT": 0.5},
+    }
+    RP_MULT_4H = {0: 2.0, 1: 1.0, 2: 1.0, 3: 1.0, 4: 1.0, 5: 1.0}  # 4L
+    RP_FILTER_ENABLE = True
+    # ⭐ Stage 3 Wave-aware 처방 fallback
+    USE_PD_AWARE_FILTER = True
+    PD_AWARE_DISCOUNT_SHORT_MULT = 0.5
+    USE_WEAK_SETUP_FILTER = True
+    WEAK_SETUP_RISK_MULT = 0.2
+    WEAK_SETUPS_SET = set()
+    USE_WAVE_PATTERN_RULES = True
+    PATTERN_MULTS = {
+        "weak_d1_h4_opposite": 0.5, "weak_h1_expansion_short": 0.5,
+        "weak_d1up_h4corr_long": 0.7,
+        "strong_expansion_x_expansion": 1.5, "strong_h1_compression_short": 1.3,
+        "strong_h1_compression_long": 1.2,
+        "weak_T2_h1expansion": 0.3, "strong_T2aligned_h1comp_short": 1.5,
+    }
+    PATTERN_MULT_FLOOR = 0.2
+    PATTERN_MULT_CEILING = 2.0
+    USE_BALANCE_AWARE_WEAK_SKIP = True
+    WEAK_SKIP_BALANCE_THRESHOLD_USDT = 50_000.0
+
+
+MIN_SCORE = 7.5
+
+# [BACKTEST v1.2] Freshness 재평가 로직
+FRESHNESS_MAX_BONUS = 1.5       # OB fresh(+1.0) + FVG fresh(+0.5) 최대치
+RELAX_MIN_SCORE = MIN_SCORE - FRESHNESS_MAX_BONUS  # 7.5 → 후보 필터 관대하게
+
+# [BACKTEST v1.2] 같은 방향 재진입 cooldown
+# 스탑터진 후 같은 방향으로 즉시 재진입하는 것 금지 (H4 6봉 = 24시간)
+SAME_SIDE_COOLDOWN_HOURS = 24
+
+LONG_BASE_ENTRY_FRAC = 0.10
+SHORT_BASE_ENTRY_FRAC = 0.90
+
+H1_REFINE_LOOKBACK_HOURS = 12
+H1_REFINE_MAX_IMPROVE_FRAC = 0.25
+H1_CHOCH_CONFIRM_HOURS = 16
+
+FAST_2R_BARS_MAX = 3
+ABOVE_2R_BARS_MIN = 3
+MAX_RR_AFTER_2R_MIN = 3.0
+
+USE_SEQ_RUNNER_PROTECTION_BASELINE = True
+RUNNER_CANDIDATE_MIN_CONDS = 2
+POST_2OF3_APPLY_USE_EXPANSION_FILTER = True
+POST_2OF3_APPLY_MAX_RR_AFTER_2R = 1.5
+RUNNER_PROTECT_LOCKED_R = 0.30
+RUNNER_PROTECT_ONLY_IF_BE_MOVED = True
+
+USE_HSB_RLC_BASELINE = True
+HSB_SCORE_THRESHOLD = 11.0
+HSB_CONFIRM_BARS = 5
+HSB_FAST_FOLLOW_BARS_MAX = 2
+HSB_HOLD_BARS_MIN = 3
+HSB_EXTRA_EXPAND_MIN = 1.5
+HSB_POST_FILTER_MIN = 0.75
+HSB_FAST_FOLLOW_DELTA_R = 0.5
+
+# Stage 4K RP boost 호환 (RP_TIER_MULT_TABLE = RP_MULT_4H)
+RP_TIER_MULT_TABLE = RP_MULT_4H
+
+
+def apply_basic_indicators(data: pd.DataFrame) -> pd.DataFrame:
+    data = data.copy()
+
+    data["ema20"] = data["close"].ewm(span=20, adjust=False).mean()
+    data["ema50"] = data["close"].ewm(span=50, adjust=False).mean()
+    data["ema200"] = data["close"].ewm(span=200, adjust=False).mean()
+
+    def get_trend(row: pd.Series) -> str:
+        if row["ema20"] < row["ema50"] < row["ema200"]:
+            return "down"
+        if row["ema20"] > row["ema50"] > row["ema200"]:
+            return "up"
+        return "neutral"
+
+    data["trend"] = data.apply(get_trend, axis=1)
+    data["range"] = data["high"] - data["low"]
+    data["body"] = (data["close"] - data["open"]).abs()
+    data["body_ratio"] = np.where(data["range"] > 0, data["body"] / data["range"], 0.0)
+
+    tr1 = data["high"] - data["low"]
+    tr2 = (data["high"] - data["close"].shift(1)).abs()
+    tr3 = (data["low"] - data["close"].shift(1)).abs()
+    data["tr"] = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    data["atr"] = data["tr"].rolling(14).mean()
+
+    return data
+
+
+def apply_mss(data: pd.DataFrame, mss_lookback: int = 8) -> pd.DataFrame:
+    data = data.copy()
+    data["bull_mss"] = False
+    data["bear_mss"] = False
+
+    for i in range(mss_lookback, len(data)):
+        prev_high = data["high"].iloc[i - mss_lookback:i].max()
+        prev_low = data["low"].iloc[i - mss_lookback:i].min()
+
+        if data.loc[i, "close"] > prev_high:
+            data.loc[i, "bull_mss"] = True
+        if data.loc[i, "close"] < prev_low:
+            data.loc[i, "bear_mss"] = True
+
+    return data
+
+
+def apply_displacement(data: pd.DataFrame, disp_body_ratio: float = 0.45, disp_atr_mult: float = 0.90) -> pd.DataFrame:
+    data = data.copy()
+    data["bull_disp"] = False
+    data["bear_disp"] = False
+    data["disp_strength"] = 0.0
+
+    for i in range(1, len(data)):
+        atr_val = data.loc[i, "atr"]
+        if pd.isna(atr_val) or atr_val == 0:
+            continue
+
+        bull = (
+            data.loc[i, "close"] > data.loc[i, "open"]
+            and data.loc[i, "body_ratio"] >= disp_body_ratio
+            and data.loc[i, "range"] >= atr_val * disp_atr_mult
+        )
+        bear = (
+            data.loc[i, "close"] < data.loc[i, "open"]
+            and data.loc[i, "body_ratio"] >= disp_body_ratio
+            and data.loc[i, "range"] >= atr_val * disp_atr_mult
+        )
+
+        data.loc[i, "bull_disp"] = bull
+        data.loc[i, "bear_disp"] = bear
+        data.loc[i, "disp_strength"] = data.loc[i, "range"] / atr_val
+
+    return data
+
+
+def apply_fvg(data: pd.DataFrame) -> pd.DataFrame:
+    data = data.copy()
+    data["bull_fvg_low"] = np.nan
+    data["bull_fvg_high"] = np.nan
+    data["bear_fvg_low"] = np.nan
+    data["bear_fvg_high"] = np.nan
+    data["bull_fvg_size"] = np.nan
+    data["bear_fvg_size"] = np.nan
+
+    for i in range(2, len(data)):
+        if data.loc[i, "low"] > data.loc[i - 2, "high"]:
+            data.loc[i, "bull_fvg_low"] = data.loc[i - 2, "high"]
+            data.loc[i, "bull_fvg_high"] = data.loc[i, "low"]
+            data.loc[i, "bull_fvg_size"] = data.loc[i, "low"] - data.loc[i - 2, "high"]
+
+        if data.loc[i, "high"] < data.loc[i - 2, "low"]:
+            data.loc[i, "bear_fvg_low"] = data.loc[i, "high"]
+            data.loc[i, "bear_fvg_high"] = data.loc[i - 2, "low"]
+            data.loc[i, "bear_fvg_size"] = data.loc[i - 2, "low"] - data.loc[i, "high"]
+
+    return data
+
+
+def apply_ob(data: pd.DataFrame, ob_lookback: int = 8) -> pd.DataFrame:
+    data = data.copy()
+    data["bull_ob_low"] = np.nan
+    data["bull_ob_high"] = np.nan
+    data["bear_ob_low"] = np.nan
+    data["bear_ob_high"] = np.nan
+    data["bull_ob_size"] = np.nan
+    data["bear_ob_size"] = np.nan
+    data["bull_ob_source_idx"] = np.nan
+    data["bear_ob_source_idx"] = np.nan
+
+    for i in range(2, len(data)):
+        if data.loc[i, "bull_disp"]:
+            for j in range(i - 1, max(i - ob_lookback - 1, -1), -1):
+                if data.loc[j, "close"] < data.loc[j, "open"]:
+                    data.loc[i, "bull_ob_low"] = data.loc[j, "low"]
+                    data.loc[i, "bull_ob_high"] = data.loc[j, "high"]
+                    data.loc[i, "bull_ob_size"] = data.loc[j, "high"] - data.loc[j, "low"]
+                    data.loc[i, "bull_ob_source_idx"] = j
+                    break
+
+        if data.loc[i, "bear_disp"]:
+            for j in range(i - 1, max(i - ob_lookback - 1, -1), -1):
+                if data.loc[j, "close"] > data.loc[j, "open"]:
+                    data.loc[i, "bear_ob_low"] = data.loc[j, "low"]
+                    data.loc[i, "bear_ob_high"] = data.loc[j, "high"]
+                    data.loc[i, "bear_ob_size"] = data.loc[j, "high"] - data.loc[j, "low"]
+                    data.loc[i, "bear_ob_source_idx"] = j
+                    break
+    return data
+
+
+def apply_pd(data: pd.DataFrame, pd_lookback: int = 40) -> pd.DataFrame:
+    data = data.copy()
+    data["pd_high"] = data["high"].rolling(pd_lookback).max()
+    data["pd_low"] = data["low"].rolling(pd_lookback).min()
+    data["pd_mid"] = (data["pd_high"] + data["pd_low"]) / 2
+    data["pd_loc"] = np.where(data["close"] >= data["pd_mid"], "premium", "discount")
+    return data
+
+
+def apply_pivots(data: pd.DataFrame, swing_len: int = 3) -> pd.DataFrame:
+    data = data.copy()
+    data["pivot_high"] = np.nan
+    data["pivot_low"] = np.nan
+
+    for i in range(swing_len, len(data) - swing_len):
+        if data.loc[i, "high"] == data["high"].iloc[i - swing_len:i + swing_len + 1].max():
+            data.loc[i, "pivot_high"] = data.loc[i, "high"]
+        if data.loc[i, "low"] == data["low"].iloc[i - swing_len:i + swing_len + 1].min():
+            data.loc[i, "pivot_low"] = data.loc[i, "low"]
+
+    last_high = np.nan
+    last_low = np.nan
+    prev_high = np.nan
+    prev_low = np.nan
+
+    data["last_pivot_high"] = np.nan
+    data["prev_pivot_high"] = np.nan
+    data["last_pivot_low"] = np.nan
+    data["prev_pivot_low"] = np.nan
+
+    for i in range(len(data)):
+        if pd.notna(data.loc[i, "pivot_high"]):
+            prev_high = last_high
+            last_high = data.loc[i, "pivot_high"]
+        if pd.notna(data.loc[i, "pivot_low"]):
+            prev_low = last_low
+            last_low = data.loc[i, "pivot_low"]
+
+        data.loc[i, "last_pivot_high"] = last_high
+        data.loc[i, "prev_pivot_high"] = prev_high
+        data.loc[i, "last_pivot_low"] = last_low
+        data.loc[i, "prev_pivot_low"] = prev_low
+
+    return data
+
+
+def apply_structure_bias(data: pd.DataFrame) -> pd.DataFrame:
+    data = data.copy()
+    data["structure_bias"] = "neutral"
+
+    current_bias = "neutral"
+    for i in range(len(data)):
+        lph = data.loc[i, "last_pivot_high"]
+        pph = data.loc[i, "prev_pivot_high"]
+        lpl = data.loc[i, "last_pivot_low"]
+        ppl = data.loc[i, "prev_pivot_low"]
+
+        if pd.notna(lph) and pd.notna(pph) and pd.notna(lpl) and pd.notna(ppl):
+            if lph > pph and lpl > ppl:
+                current_bias = "up"
+            elif lph < pph and lpl < ppl:
+                current_bias = "down"
+
+        data.loc[i, "structure_bias"] = current_bias
+
+    return data
+
+
+def apply_choch(data: pd.DataFrame, break_atr_mult: float = 0.15) -> pd.DataFrame:
+    data = data.copy()
+    data["bull_choch"] = False
+    data["bear_choch"] = False
+    data["bull_choch_level"] = np.nan
+    data["bear_choch_level"] = np.nan
+
+    for i in range(1, len(data)):
+        atr_val = data.loc[i, "atr"] if pd.notna(data.loc[i, "atr"]) else np.nan
+        if pd.isna(atr_val) or atr_val <= 0:
+            continue
+
+        bias = data.loc[i - 1, "structure_bias"]
+        last_high = data.loc[i - 1, "last_pivot_high"]
+        last_low = data.loc[i - 1, "last_pivot_low"]
+
+        if bias == "down" and pd.notna(last_high):
+            if data.loc[i, "close"] > (last_high + atr_val * break_atr_mult):
+                data.loc[i, "bull_choch"] = True
+                data.loc[i, "bull_choch_level"] = last_high
+
+        if bias == "up" and pd.notna(last_low):
+            if data.loc[i, "close"] < (last_low - atr_val * break_atr_mult):
+                data.loc[i, "bear_choch"] = True
+                data.loc[i, "bear_choch_level"] = last_low
+
+    return data
+
+
+def apply_h4_market_state(data: pd.DataFrame, transition_bars: int = 8) -> pd.DataFrame:
+    data = data.copy()
+    data["market_state"] = "neutral"
+
+    bull_until = -1
+    bear_until = -1
+
+    for i in range(len(data)):
+        if data.loc[i, "bull_choch"]:
+            bull_until = i + transition_bars
+            bear_until = -1
+
+        if data.loc[i, "bear_choch"]:
+            bear_until = i + transition_bars
+            bull_until = -1
+
+        base_trend = data.loc[i, "trend"]
+
+        if bull_until >= i and base_trend != "up":
+            state = "bull_transition"
+        elif bear_until >= i and base_trend != "down":
+            state = "bear_transition"
+        else:
+            if base_trend == "up":
+                state = "up"
+            elif base_trend == "down":
+                state = "down"
+            else:
+                state = "neutral"
+
+        data.loc[i, "market_state"] = state
+
+    return data
+
+
+# =========================================================
+# ⭐⭐⭐ Stage 3 Wave-aware 함수들 (백테스트 BOOST15 BA 최종) ⭐⭐⭐
+# =========================================================
+
+def apply_wave_state(data: pd.DataFrame) -> pd.DataFrame:
+    """
+    swing sequence 기반 wave_state 분류 (각 timeframe 내부):
+      - impulse_up:    HH + HL
+      - impulse_down:  LL + LH
+      - expansion:     HH + LL  (변동성 확장)
+      - compression:   LH + HL  (수렴 — triangle)
+      - unclear:       data 부족 또는 동일 가격
+
+    [선결] last_pivot_high, prev_pivot_high, last_pivot_low, prev_pivot_low 가 있어야 함.
+    """
+    data = data.copy()
+    data["wave_state"] = "unclear"
+    for i in range(len(data)):
+        lph = data.loc[i, "last_pivot_high"]
+        pph = data.loc[i, "prev_pivot_high"]
+        lpl = data.loc[i, "last_pivot_low"]
+        ppl = data.loc[i, "prev_pivot_low"]
+        if pd.isna(lph) or pd.isna(pph) or pd.isna(lpl) or pd.isna(ppl):
+            continue
+        is_HH = lph > pph
+        is_LH = lph < pph
+        is_HL = lpl > ppl
+        is_LL = lpl < ppl
+        if is_HH and is_HL:
+            data.loc[i, "wave_state"] = "impulse_up"
+        elif is_LL and is_LH:
+            data.loc[i, "wave_state"] = "impulse_down"
+        elif is_HH and is_LL:
+            data.loc[i, "wave_state"] = "expansion"
+        elif is_LH and is_HL:
+            data.loc[i, "wave_state"] = "compression"
+    return data
+
+
+def apply_h1_choch_trend(df_h4: pd.DataFrame, df_h1: pd.DataFrame) -> pd.DataFrame:
+    """
+    H4 dataframe 의 trend 컬럼을 H1 CHoCH state 기반으로 갈아끼움.
+    각 H4 시점 t 에 대해 df_h1 에서 timestamp <= t 인 마지막 bull_choch / bear_choch
+    중 더 최근인 쪽이 trend ("up"/"down"/"neutral").
+    last_choch_ts, last_choch_dir 컬럼도 추가 (stale CHoCH 모니터링용).
+    """
+    df_h4 = df_h4.copy()
+
+    if "bull_choch" not in df_h1.columns or "bear_choch" not in df_h1.columns:
+        return df_h4
+
+    bull_ts_arr = df_h1.loc[df_h1["bull_choch"], "timestamp"].sort_values().values
+    bear_ts_arr = df_h1.loc[df_h1["bear_choch"], "timestamp"].sort_values().values
+    n_bull = len(bull_ts_arr)
+    n_bear = len(bear_ts_arr)
+    h4_ts = df_h4["timestamp"].values
+    n_h4 = len(h4_ts)
+
+    if n_bull > 0:
+        bull_last_pos = np.searchsorted(bull_ts_arr, h4_ts, side="right") - 1
+    else:
+        bull_last_pos = np.full(n_h4, -1, dtype=int)
+    if n_bear > 0:
+        bear_last_pos = np.searchsorted(bear_ts_arr, h4_ts, side="right") - 1
+    else:
+        bear_last_pos = np.full(n_h4, -1, dtype=int)
+
+    trends = np.array(["neutral"] * n_h4, dtype=object)
+    last_choch_ts = np.array([pd.NaT] * n_h4, dtype=object)
+    last_choch_dir = np.array(["none"] * n_h4, dtype=object)
+
+    for k in range(n_h4):
+        bp = bull_last_pos[k]; rp = bear_last_pos[k]
+        has_bull = bp >= 0; has_bear = rp >= 0
+        if not has_bull and not has_bear:
+            continue
+        if has_bull and not has_bear:
+            trends[k] = "up"; last_choch_ts[k] = bull_ts_arr[bp]; last_choch_dir[k] = "bull"
+            continue
+        if has_bear and not has_bull:
+            trends[k] = "down"; last_choch_ts[k] = bear_ts_arr[rp]; last_choch_dir[k] = "bear"
+            continue
+        tb = bull_ts_arr[bp]; tr_ = bear_ts_arr[rp]
+        if tb > tr_:
+            trends[k] = "up"; last_choch_ts[k] = tb; last_choch_dir[k] = "bull"
+        elif tr_ > tb:
+            trends[k] = "down"; last_choch_ts[k] = tr_; last_choch_dir[k] = "bear"
+        else:
+            last_choch_ts[k] = tb; last_choch_dir[k] = "tie"
+
+    df_h4["trend"] = trends
+    df_h4["last_choch_ts"] = last_choch_ts
+    df_h4["last_choch_dir"] = last_choch_dir
+    return df_h4
+
+
+def build_d1_trend(df_h4: pd.DataFrame) -> pd.DataFrame:
+    """H4 봉을 일자별 그룹해서 D1 OHLCV 만든 후 EMA + wave_state 추가."""
+    D1_EMA_FAST = 20
+    D1_EMA_SLOW = 50
+
+    d = df_h4.copy()
+    d["date_utc"] = d["timestamp"].dt.tz_convert("UTC").dt.date
+    d1 = d.groupby("date_utc", as_index=False).agg(
+        timestamp=("timestamp", "last"),
+        open=("open", "first"),
+        high=("high", "max"),
+        low=("low", "min"),
+        close=("close", "last"),
+    )
+    d1 = d1.sort_values("timestamp").reset_index(drop=True)
+    d1["ema_fast"] = d1["close"].ewm(span=D1_EMA_FAST, adjust=False).mean()
+    d1["ema_slow"] = d1["close"].ewm(span=D1_EMA_SLOW, adjust=False).mean()
+    d1["ema200"]   = d1["close"].ewm(span=200, adjust=False).mean()
+    d1["ema200_slope_pct_20d"] = (
+        (d1["ema200"] - d1["ema200"].shift(20)) / d1["ema200"].shift(20) * 100.0
+    )
+
+    def _ema_state(r):
+        if pd.isna(r["ema_slow"]) or pd.isna(r["ema200"]):
+            return "neutral"
+        if r["ema_slow"] > r["ema200"]:
+            return "bull"
+        if r["ema_slow"] < r["ema200"]:
+            return "bear"
+        return "neutral"
+    d1["ema_state"] = d1.apply(_ema_state, axis=1)
+
+    def _d1_trend(r):
+        if pd.isna(r["ema_fast"]) or pd.isna(r["ema_slow"]):
+            return "neutral"
+        if r["close"] > r["ema_fast"] > r["ema_slow"]:
+            return "up"
+        if r["close"] < r["ema_fast"] < r["ema_slow"]:
+            return "down"
+        return "neutral"
+    d1["d1_trend"] = d1.apply(_d1_trend, axis=1)
+
+    # D1 wave_state — swing 분석
+    d1 = apply_pivots(d1, swing_len=3)
+    d1 = apply_wave_state(d1)
+    return d1
+
+
+def get_wave_pattern_mult(d1ws: str, h4ws: str, h1ws: str, side: str, skip_weak: bool = False) -> float:
+    """
+    Wave Pattern Rules (옵션 B + 옵션 C). matching된 패턴들의 mult 곱해서 [floor, ceiling] clamp.
+    skip_weak=True 면 WEAK 패턴 모두 비활성 (Balance-aware 자본 < 임계 시).
+    """
+    if not USE_WAVE_PATTERN_RULES:
+        return 1.0
+    mult = 1.0
+    if not skip_weak:
+        # WEAK 규칙들
+        if ((d1ws == "impulse_up" and h4ws == "impulse_down") or
+            (d1ws == "impulse_down" and h4ws == "impulse_up")):
+            mult *= PATTERN_MULTS["weak_d1_h4_opposite"]
+        if h1ws == "expansion" and side == "short":
+            mult *= PATTERN_MULTS["weak_h1_expansion_short"]
+        if d1ws == "impulse_up" and h4ws in ("compression", "expansion") and side == "long":
+            mult *= PATTERN_MULTS["weak_d1up_h4corr_long"]
+        # 옵션 C WEAK: D1=H4 same direction + H1=expansion
+        if h1ws == "expansion" and (
+            (d1ws == "impulse_up" and h4ws == "impulse_up") or
+            (d1ws == "impulse_down" and h4ws == "impulse_down")
+        ):
+            mult *= PATTERN_MULTS["weak_T2_h1expansion"]
+    # STRONG 규칙들 (항상 적용 — boost는 자본 작을 때도 자본 축적 가속에 도움)
+    if d1ws == "expansion" and h4ws == "expansion":
+        mult *= PATTERN_MULTS["strong_expansion_x_expansion"]
+    if h1ws == "compression" and side == "short":
+        mult *= PATTERN_MULTS["strong_h1_compression_short"]
+    if h1ws == "compression" and side == "long":
+        mult *= PATTERN_MULTS["strong_h1_compression_long"]
+    # 옵션 C STRONG: D1=H4=impulse_down + H1=compression + SHORT (PF 20!)
+    if (d1ws == "impulse_down" and h4ws == "impulse_down" and
+        h1ws == "compression" and side == "short"):
+        mult *= PATTERN_MULTS["strong_T2aligned_h1comp_short"]
+    return max(min(mult, PATTERN_MULT_CEILING), PATTERN_MULT_FLOOR)
+
+
+def get_step3_risk_multipliers(
+    df_struct: pd.DataFrame,
+    df_h1: pd.DataFrame,
+    df_d1: pd.DataFrame,
+    i: int,
+    side: str,
+    balance: float,
+) -> Tuple[float, Dict[str, Any]]:
+    """
+    Step 3 Wave-aware 처방 통합 risk multiplier 계산.
+    Returns (combined_mult, info_dict).
+    """
+    info = {
+        "pd_aware_mult": 1.0,
+        "weak_setup_mult": 1.0,
+        "wave_pattern_mult": 1.0,
+        "d1_wave_state": "unclear",
+        "h4_wave_state": "unclear",
+        "h1_wave_state": "unclear",
+        "entry_pd_loc": "unknown",
+        "balance_aware_skip_weak": False,
+    }
+    # Balance-aware: 자본 작을 때 WEAK 처방 비활성
+    skip_weak = bool(USE_BALANCE_AWARE_WEAK_SKIP and balance < WEAK_SKIP_BALANCE_THRESHOLD_USDT)
+    info["balance_aware_skip_weak"] = skip_weak
+
+    # H4 row lookup
+    try:
+        if 0 <= i < len(df_struct):
+            h4_row = df_struct.iloc[i]
+            info["h4_wave_state"] = str(h4_row.get("wave_state", "unclear"))
+            pd_loc = h4_row.get("pd_loc", "unknown")
+            info["entry_pd_loc"] = str(pd_loc) if pd.notna(pd_loc) else "unknown"
+            # PD-aware (WEAK)
+            if USE_PD_AWARE_FILTER and not skip_weak:
+                if info["entry_pd_loc"] == "discount" and side == "short":
+                    info["pd_aware_mult"] = PD_AWARE_DISCOUNT_SHORT_MULT
+    except Exception:
+        pass
+
+    # H1 wave_state (timestamp 기반)
+    try:
+        if df_h1 is not None and len(df_h1) > 0 and "wave_state" in df_h1.columns:
+            h4_ts = df_struct.iloc[i]["timestamp"]
+            sub = df_h1[df_h1["timestamp"] <= h4_ts]
+            if len(sub) > 0:
+                info["h1_wave_state"] = str(sub.iloc[-1].get("wave_state", "unclear"))
+    except Exception:
+        pass
+
+    # D1 wave_state
+    try:
+        if df_d1 is not None and len(df_d1) > 0 and "wave_state" in df_d1.columns:
+            h4_ts = df_struct.iloc[i]["timestamp"]
+            sub = df_d1[df_d1["timestamp"] < h4_ts]
+            if len(sub) > 0:
+                info["d1_wave_state"] = str(sub.iloc[-1].get("wave_state", "unclear"))
+    except Exception:
+        pass
+
+    # 옵션 A: Weak Setup Blacklist (WEAK)
+    if USE_WEAK_SETUP_FILTER and not skip_weak:
+        setup_key = (info["d1_wave_state"], info["h4_wave_state"], info["h1_wave_state"], side)
+        if setup_key in WEAK_SETUPS_SET:
+            info["weak_setup_mult"] = WEAK_SETUP_RISK_MULT
+
+    # 옵션 B/C: Wave Pattern Rules
+    info["wave_pattern_mult"] = get_wave_pattern_mult(
+        info["d1_wave_state"], info["h4_wave_state"], info["h1_wave_state"], side,
+        skip_weak=skip_weak,
+    )
+
+    # Combined mult (PATTERN_MULT_FLOOR로 너무 작아지지 않게 보호)
+    combined = info["pd_aware_mult"] * info["weak_setup_mult"] * info["wave_pattern_mult"]
+    combined = max(combined, PATTERN_MULT_FLOOR)
+    return combined, info
+
+
+def prepare_h4_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """H4 indicator 흐름. apply_h4_market_state는 H1 CHoCH trend 적용 후 별도 호출."""
+    df = apply_basic_indicators(df)
+    df = apply_mss(df, mss_lookback=80)
+    df = apply_displacement(df)
+    df = apply_fvg(df)
+    df = apply_ob(df, ob_lookback=15)
+    df = apply_pd(df, pd_lookback=1620)
+    df = apply_pivots(df, swing_len=30)
+    df = apply_structure_bias(df)
+    df = apply_wave_state(df)   # ⭐ H4 wave_state 추가
+    df = apply_choch(df, break_atr_mult=0.18)
+    # apply_h4_market_state 는 H1 CHoCH trend 적용 후 generate_entry_signal 에서 호출
+    return df
+
+
+def prepare_h1_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    df = apply_basic_indicators(df)
+    df = apply_mss(df)
+    df = apply_displacement(df)
+    df = apply_fvg(df)
+    df = apply_ob(df)
+    df = apply_pd(df, pd_lookback=40)
+    df = apply_pivots(df, swing_len=3)
+    df = apply_structure_bias(df)
+    df = apply_wave_state(df)   # ⭐ H1 wave_state 추가
+    df = apply_choch(df, break_atr_mult=0.12)
+    df = apply_sweep_flags(df, recent_sweep_n=10)
+    return df
+
+
+# =========================================================
+# v1.9b: SWEEP FLAGS
+# =========================================================
+def apply_sweep_flags(df: pd.DataFrame, recent_sweep_n: int = 10) -> pd.DataFrame:
+    """
+    sweep(유동성 청산) 플래그를 부여:
+      - pivot_sweep_high/low: pivot high/low 를 bar 가 뚫었는지
+      - recent_sweep_high/low: 최근 N 봉 최고/최저를 뚫었는지
+    """
+    df = df.copy()
+    n = len(df)
+    if n == 0:
+        df["pivot_sweep_high"] = False
+        df["pivot_sweep_low"] = False
+        df["recent_sweep_high"] = False
+        df["recent_sweep_low"] = False
+        return df
+
+    # pivot sweep: pivot_high/low 가 이미 있으면 활용
+    if "pivot_high" in df.columns and "pivot_low" in df.columns:
+        # 해당 bar 에서 pivot 가격을 뚫었는지
+        df["pivot_sweep_high"] = df["high"].shift(0) > df["pivot_high"].ffill()
+        df["pivot_sweep_low"] = df["low"].shift(0) < df["pivot_low"].ffill()
+    else:
+        df["pivot_sweep_high"] = False
+        df["pivot_sweep_low"] = False
+
+    # recent N 봉 최고/최저 sweep
+    if recent_sweep_n > 0 and n >= recent_sweep_n:
+        rolling_high_prev = df["high"].shift(1).rolling(window=recent_sweep_n, min_periods=1).max()
+        rolling_low_prev = df["low"].shift(1).rolling(window=recent_sweep_n, min_periods=1).min()
+        df["recent_sweep_high"] = df["high"] > rolling_high_prev
+        df["recent_sweep_low"] = df["low"] < rolling_low_prev
+    else:
+        df["recent_sweep_high"] = False
+        df["recent_sweep_low"] = False
+
+    df["pivot_sweep_high"] = df["pivot_sweep_high"].fillna(False).astype(bool)
+    df["pivot_sweep_low"] = df["pivot_sweep_low"].fillna(False).astype(bool)
+    df["recent_sweep_high"] = df["recent_sweep_high"].fillna(False).astype(bool)
+    df["recent_sweep_low"] = df["recent_sweep_low"].fillna(False).astype(bool)
+    return df
+
+
+# =========================================================
+# v1.9b: PRE-ENTRY CONFLUENCE
+# =========================================================
+def compute_pre_entry_confluence(
+    df_h4: pd.DataFrame,
+    df_h1: pd.DataFrame,
+    h4_entry_idx: int,
+    zone_low: float,
+    zone_high: float,
+    lookback_ltf_bars: int = PRE_ENTRY_LOOKBACK_LTF_BARS,
+    exclude_recent_h1: int = 0,
+) -> Tuple[int, int, int, int]:
+    """
+    진입 직전 H1 N개 봉에서 zone 내 FVG/OB/sweep 카운트.
+    return: (sweep_count, fvg_count, ob_count, total_count)
+
+    [v1.9_REALISTIC] exclude_recent_h1 파라미터 추가.
+    실전에서는 0 (최신 정보 활용), 백테스트에서는 1 (실전 지연 시뮬레이션).
+    """
+    if h4_entry_idx < 0 or h4_entry_idx >= len(df_h4):
+        return 0, 0, 0, 0
+    entry_h4_ts = df_h4.iloc[h4_entry_idx]["timestamp"]
+
+    ltf_mask = df_h1["timestamp"] <= entry_h4_ts
+    if not ltf_mask.any():
+        return 0, 0, 0, 0
+    ltf_entry_idx = int(df_h1[ltf_mask].index[-1])
+
+    # v1.9_REALISTIC: 최근 H1 봉 제외
+    ltf_entry_idx_adjusted = ltf_entry_idx - int(exclude_recent_h1)
+    if ltf_entry_idx_adjusted < 0:
+        return 0, 0, 0, 0
+
+    start_idx = max(0, ltf_entry_idx_adjusted - lookback_ltf_bars)
+    end_idx = ltf_entry_idx_adjusted
+    if start_idx > end_idx or start_idx >= len(df_h1):
+        return 0, 0, 0, 0
+
+    sub = df_h1.iloc[start_idx:end_idx + 1]
+    fvg_count = ob_count = sweep_count = 0
+
+    for _, r in sub.iterrows():
+        # FVG 중심점이 zone 안에 있는지
+        for fvg_lo_col, fvg_hi_col in [("bull_fvg_low", "bull_fvg_high"), ("bear_fvg_low", "bear_fvg_high")]:
+            lo = r.get(fvg_lo_col)
+            hi = r.get(fvg_hi_col)
+            if pd.notna(lo) and pd.notna(hi):
+                mid = (float(lo) + float(hi)) / 2.0
+                if zone_low <= mid <= zone_high:
+                    fvg_count += 1
+
+        # OB 중심점이 zone 안에 있는지
+        for ob_lo_col, ob_hi_col in [("bull_ob_low", "bull_ob_high"), ("bear_ob_low", "bear_ob_high")]:
+            lo = r.get(ob_lo_col)
+            hi = r.get(ob_hi_col)
+            if pd.notna(lo) and pd.notna(hi):
+                mid = (float(lo) + float(hi)) / 2.0
+                if zone_low <= mid <= zone_high:
+                    ob_count += 1
+
+        # Sweep 플래그 — high/low 가 zone 범위 내에 있을 때만 카운트
+        hs = bool(r.get("pivot_sweep_high", False)) or bool(r.get("recent_sweep_high", False))
+        ls = bool(r.get("pivot_sweep_low", False)) or bool(r.get("recent_sweep_low", False))
+        if hs:
+            px = float(r["high"])
+            if zone_low <= px <= zone_high:
+                sweep_count += 1
+        if ls:
+            px = float(r["low"])
+            if zone_low <= px <= zone_high:
+                sweep_count += 1
+
+    total = fvg_count + ob_count + sweep_count
+    return sweep_count, fvg_count, ob_count, total
+
+
+# =========================================================
+# v1.9b: WICK RATIO (최근 5봉 방향성 꼬리 비율)
+# =========================================================
+def compute_wick_ratio_5(
+    df_h4: pd.DataFrame,
+    df_h1: pd.DataFrame,
+    h4_entry_idx: int,
+    side: str,
+    lookback_n: int = WICK_LOOKBACK_BARS,
+    exclude_recent_h1: int = 0,
+) -> float:
+    """
+    진입 직전 H1 N봉의 방향성 꼬리(wick) / 총 range 비율.
+    꼬리가 작을수록 강한 진입 확신 (= S 조건).
+
+    side: "long" 이면 아래 꼬리, "short" 이면 위 꼬리 기준.
+
+    [v1.9_REALISTIC] exclude_recent_h1 파라미터 추가.
+    """
+    if h4_entry_idx < 0 or h4_entry_idx >= len(df_h4):
+        return 0.0
+    entry_h4_ts = df_h4.iloc[h4_entry_idx]["timestamp"]
+
+    ltf_mask = df_h1["timestamp"] <= entry_h4_ts
+    if not ltf_mask.any():
+        return 0.0
+    ltf_entry_idx = int(df_h1[ltf_mask].index[-1])
+
+    # v1.9_REALISTIC: 최근 H1 봉 제외
+    ltf_entry_idx_adjusted = ltf_entry_idx - int(exclude_recent_h1)
+    if ltf_entry_idx_adjusted < 0:
+        return 0.0
+
+    start_idx = max(0, ltf_entry_idx_adjusted - lookback_n)
+    end_idx = ltf_entry_idx_adjusted
+    if start_idx >= end_idx:
+        return 0.0
+
+    sub = df_h1.iloc[start_idx:end_idx]
+    sum_wick = 0.0
+    sum_range = 0.0
+
+    for _, r in sub.iterrows():
+        try:
+            o = float(r["open"])
+            c_px = float(r["close"])
+            h = float(r["high"])
+            l = float(r["low"])
+        except Exception:
+            continue
+
+        body_top = max(o, c_px)
+        body_bot = min(o, c_px)
+        bar_range = h - l
+
+        if side == "long":
+            directional_wick = body_bot - l
+        else:
+            directional_wick = h - body_top
+        directional_wick = max(0.0, directional_wick)
+
+        sum_wick += directional_wick
+        sum_range += bar_range
+
+    if sum_range <= 0:
+        return 0.0
+    return sum_wick / sum_range
+
+
+# =========================================================
+# Stage 4K: WIN69 canonical combos + atomic tier 매트릭스
+# =========================================================
+
+WIN69_CANONICAL_COMBOS = [
+    ("a_pre_total_ge1", "a_overlap", "a_room"),  # win=80.39 pf=7.07 n=51
+    ("a_pre_total_ge1", "a_overlap"),  # win=79.71 pf=7.06 n=69
+    ("a_sweep", "a_overlap", "a_room"),  # win=82.93 pf=6.93 n=41
+    ("a_score_ge13", "a_pre_total_ge1", "a_overlap", "a_room"),  # win=81.25 pf=6.90 n=48
+    ("a_score_ge13", "a_pre_total_ge1", "a_overlap"),  # win=80.30 pf=6.89 n=66
+    ("a_sweep", "a_pre_total_ge1", "a_overlap", "a_room"),  # win=82.50 pf=6.76 n=40
+    ("a_sweep", "a_overlap"),  # win=78.43 pf=6.69 n=51
+    ("a_wick_le_q1", "a_overlap"),  # win=81.82 pf=6.63 n=44
+    ("a_sweep", "a_score_ge13", "a_overlap", "a_room"),  # win=83.78 pf=6.56 n=37
+    ("a_wick_le_q1", "a_overlap", "a_room"),  # win=81.82 pf=6.54 n=33
+    ("a_sweep", "a_pre_total_ge1", "a_overlap"),  # win=78.00 pf=6.53 n=50
+    ("a_wick_le_q1", "a_pre_total_ge1", "a_overlap"),  # win=81.40 pf=6.45 n=43
+    ("a_volume", "a_pre_total_ge1", "a_overlap"),  # win=85.42 pf=6.44 n=48
+    ("a_score_ge13", "a_wick_le_q1", "a_overlap"),  # win=82.93 pf=6.40 n=41
+    ("a_wick_le_q1", "a_pre_total_ge1", "a_overlap", "a_room"),  # win=81.25 pf=6.35 n=32
+    ("a_sweep", "a_wick_le_q1", "a_overlap", "a_room"),  # win=82.14 pf=6.34 n=28
+    ("a_sweep", "a_score_ge13", "a_overlap"),  # win=78.72 pf=6.34 n=47
+    ("a_score_ge13", "a_wick_le_q1", "a_overlap", "a_room"),  # win=83.33 pf=6.31 n=30
+    ("a_volume", "a_pre_total_ge1", "a_overlap", "a_room"),  # win=86.11 pf=6.29 n=36
+    ("a_volume", "a_score_ge13", "a_pre_total_ge1", "a_overlap"),  # win=85.11 pf=6.26 n=47
+    ("a_sweep", "a_wick_le_q1", "a_overlap"),  # win=78.79 pf=6.19 n=33
+    ("a_sweep", "a_wick_le_q1", "a_pre_total_ge1", "a_overlap", "a_room"),  # win=81.48 pf=6.12 n=27
+    ("a_volume", "a_score_ge13", "a_pre_total_ge1", "a_overlap", "a_room"),  # win=85.71 pf=6.11 n=35
+    ("a_pre_total_ge4", "a_overlap", "a_room"),  # win=80.49 pf=6.10 n=41
+    ("a_sweep", "a_score_ge13", "a_wick_le_q1", "a_overlap", "a_room"),  # win=84.00 pf=6.07 n=25
+    ("a_pre_total_ge4", "a_score_ge13", "a_overlap", "a_room"),  # win=82.05 pf=6.06 n=39
+    ("a_pre_total_ge4", "a_overlap"),  # win=80.77 pf=6.05 n=52
+    ("a_pre_total_ge4", "a_score_ge13", "a_overlap"),  # win=82.00 pf=6.02 n=50
+    ("a_sweep", "a_wick_le_q1", "a_pre_total_ge1", "a_overlap"),  # win=78.12 pf=5.98 n=32
+    ("a_volume", "a_pre_total_ge4", "a_overlap"),  # win=89.19 pf=5.96 n=37
+    ("a_sweep", "a_score_ge13", "a_wick_le_q1", "a_overlap"),  # win=80.00 pf=5.93 n=30
+    ("a_volume", "a_wick_le_q1", "a_overlap"),  # win=87.50 pf=5.86 n=32
+    ("a_volume", "a_pre_total_ge4", "a_overlap", "a_room"),  # win=86.67 pf=5.85 n=30
+    ("a_pre_total_ge4", "a_wick_le_q1", "a_overlap", "a_room"),  # win=82.14 pf=5.67 n=28
+    ("a_volume", "a_score_ge13", "a_wick_le_q1", "a_overlap"),  # win=87.10 pf=5.64 n=31
+    ("a_pre_total_ge4", "a_score_ge13", "a_wick_le_q1", "a_overlap", "a_room"),  # win=84.62 pf=5.62 n=26
+    ("a_pre_total_ge4", "a_wick_le_q1", "a_overlap"),  # win=81.08 pf=5.61 n=37
+    ("a_volume", "a_pre_total_ge4", "a_sweep_count_2_4", "a_wick_le_q1", "a_fvg"),  # win=78.12 pf=5.60 n=32
+    ("a_volume", "a_wick_le_q1", "a_overlap", "a_room"),  # win=84.00 pf=5.57 n=25
+    ("a_pre_total_ge4", "a_score_ge13", "a_wick_le_q1", "a_overlap"),  # win=82.86 pf=5.56 n=35
+    ("a_sweep", "a_pre_total_ge4", "a_overlap", "a_room"),  # win=81.25 pf=5.36 n=32
+    ("a_sweep", "a_pre_total_ge4", "a_wick_le_q1", "a_overlap", "a_room"),  # win=82.61 pf=5.35 n=23
+    ("a_volume", "a_score_ge13", "a_wick_le_q1", "a_overlap", "a_room"),  # win=83.33 pf=5.35 n=24
+    ("a_sweep", "a_pre_total_ge4", "a_score_ge13", "a_overlap", "a_room"),  # win=83.33 pf=5.32 n=30
+    ("a_volume", "a_pre_total_ge4", "a_wick_le_q1", "a_overlap"),  # win=88.89 pf=5.31 n=27
+    ("a_sweep", "a_pre_total_ge4", "a_overlap"),  # win=78.38 pf=5.25 n=37
+    ("a_sweep", "a_pre_total_ge4", "a_score_ge13", "a_overlap"),  # win=80.00 pf=5.21 n=35
+    ("a_sweep", "a_pre_total_ge4", "a_wick_le_q1", "a_overlap"),  # win=77.78 pf=5.20 n=27
+    ("a_volume", "a_pre_total_ge4", "a_wick_le_q1", "a_overlap", "a_room"),  # win=85.71 pf=5.19 n=21
+    ("a_sweep", "a_pre_total_ge4", "a_score_ge13", "a_wick_le_q1", "a_overlap"),  # win=80.00 pf=5.15 n=25
+    ("a_score_ge13", "a_pre_total_ge1"),  # win=78.08 pf=5.08 n=146
+    ("a_score_ge13", "a_pre_total_ge1", "a_room"),  # win=78.76 pf=5.02 n=113
+    ("a_score_ge13", "a_pre_total_ge1", "a_fvg"),  # win=78.57 pf=4.95 n=140
+    ("a_sweep", "a_volume", "a_overlap", "a_room"),  # win=82.76 pf=4.93 n=29
+    ("a_score_ge13", "a_pre_total_ge1", "a_fvg", "a_room"),  # win=78.70 pf=4.88 n=108
+    ("a_sweep", "a_volume", "a_pre_total_ge4", "a_sweep_count_2_4", "a_fvg"),  # win=74.36 pf=4.87 n=39
+    ("a_volume", "a_score_ge13", "a_pre_total_ge1"),  # win=80.53 pf=4.86 n=113
+    ("a_sweep", "a_volume", "a_overlap"),  # win=78.79 pf=4.86 n=33
+    ("a_sweep", "a_pre_total_ge4", "a_wick_le_q1", "a_fvg", "a_room"),  # win=77.91 pf=4.80 n=86
+    ("a_sweep", "a_pre_total_ge4", "a_wick_le_q1", "a_fvg"),  # win=76.47 pf=4.79 n=102
+    ("a_score_ge13", "a_wick_le_q1", "a_pre_total_ge1", "a_fvg"),  # win=81.61 pf=4.78 n=87
+    ("a_score_ge13", "a_wick_le_q1", "a_pre_total_ge1"),  # win=80.90 pf=4.77 n=89
+    ("a_volume", "a_score_ge13", "a_pre_total_ge1", "a_room"),  # win=81.61 pf=4.75 n=87
+    ("a_sweep", "a_volume", "a_pre_total_ge1", "a_overlap", "a_room"),  # win=82.14 pf=4.75 n=28
+    ("a_score_ge13", "a_pre_total_ge1", "a_trend_align", "a_room"),  # win=77.27 pf=4.71 n=88
+    ("a_volume", "a_score_ge13", "a_pre_total_ge1", "a_fvg"),  # win=81.48 pf=4.70 n=108
+    ("a_score_ge13", "a_pre_total_ge1", "a_trend_align"),  # win=75.00 pf=4.68 n=108
+    ("a_sweep", "a_volume", "a_pre_total_ge1", "a_overlap"),  # win=78.12 pf=4.68 n=32
+    ("a_pre_total_ge4", "a_score_ge13", "a_wick_le_q1", "a_fvg"),  # win=84.21 pf=4.65 n=76
+    ("a_pre_total_ge4", "a_score_ge13", "a_wick_le_q1"),  # win=83.33 pf=4.65 n=78
+    ("a_pre_total_ge4", "a_score_ge13"),  # win=79.17 pf=4.64 n=120
+    ("a_score_ge13", "a_wick_le_q1", "a_pre_total_ge1", "a_fvg", "a_room"),  # win=81.25 pf=4.64 n=64
+    ("a_score_ge13", "a_wick_le_q1", "a_pre_total_ge1", "a_room"),  # win=80.30 pf=4.64 n=66
+    ("a_pre_total_ge4", "a_score_ge13", "a_room"),  # win=79.38 pf=4.61 n=97
+    ("a_pre_total_ge4", "a_score_ge13", "a_wick_le_q1", "a_fvg", "a_room"),  # win=84.21 pf=4.60 n=57
+    ("a_pre_total_ge4", "a_score_ge13", "a_wick_le_q1", "a_room"),  # win=83.05 pf=4.60 n=59
+    ("a_pre_total_ge4", "a_score_ge13", "a_fvg"),  # win=80.00 pf=4.60 n=115
+    ("a_volume", "a_score_ge13", "a_pre_total_ge1", "a_fvg", "a_room"),  # win=81.93 pf=4.59 n=83
+    ("a_sweep", "a_volume", "a_score_ge13", "a_overlap", "a_room"),  # win=81.48 pf=4.57 n=27
+    ("a_pre_total_ge4", "a_score_ge13", "a_fvg", "a_room"),  # win=79.57 pf=4.57 n=93
+    ("a_volume", "a_pre_total_ge4", "a_sweep_count_2_4", "a_fvg", "a_room"),  # win=76.09 pf=4.56 n=46
+    ("a_volume", "a_pre_total_ge4", "a_sweep_count_2_4", "a_fvg"),  # win=75.93 pf=4.54 n=54
+    ("a_score_ge13", "a_pre_total_ge1", "a_trend_align", "a_fvg", "a_room"),  # win=77.11 pf=4.53 n=83
+    ("a_sweep", "a_volume", "a_wick_le_q1", "a_overlap"),  # win=81.82 pf=4.53 n=22
+    ("a_sweep_count_2_4", "a_score_ge13", "a_wick_le_q1"),  # win=85.00 pf=4.52 n=20
+    ("a_sweep", "a_volume", "a_wick_le_q1", "a_overlap", "a_room"),  # win=80.95 pf=4.51 n=21
+    ("a_volume", "a_score_ge13", "a_pre_total_ge1", "a_trend_align"),  # win=77.78 pf=4.51 n=81
+    ("a_volume", "a_score_ge13", "a_pre_total_ge1", "a_trend_align", "a_room"),  # win=80.30 pf=4.51 n=66
+    ("a_score_ge13", "a_pre_total_ge1", "a_trend_align", "a_fvg"),  # win=74.76 pf=4.51 n=103
+    ("a_sweep", "a_volume", "a_score_ge13", "a_overlap"),  # win=77.42 pf=4.51 n=31
+    ("a_volume", "a_pre_total_ge4", "a_score_ge13"),  # win=82.11 pf=4.50 n=95
+    ("a_pre_total_ge4", "a_score_ge13", "a_wick_le_q1", "a_trend_align", "a_room"),  # win=81.40 pf=4.47 n=43
+    ("a_pre_total_ge4", "a_score_ge13", "a_wick_le_q1", "a_trend_align", "a_fvg"),  # win=81.13 pf=4.46 n=53
+    ("a_pre_total_ge4", "a_score_ge13", "a_wick_le_q1", "a_trend_align"),  # win=80.00 pf=4.46 n=55
+    ("a_volume", "a_pre_total_ge4", "a_score_ge13", "a_fvg"),  # win=83.52 pf=4.45 n=91
+    ("a_volume", "a_pre_total_ge4", "a_score_ge13", "a_room"),  # win=81.82 pf=4.43 n=77
+    ("a_volume", "a_pre_total_ge4", "a_score_ge13", "a_fvg", "a_room"),  # win=82.43 pf=4.39 n=74
+    ("a_sweep", "a_volume", "a_pre_total_ge4", "a_overlap"),  # win=83.33 pf=4.38 n=24
+    ("a_pre_total_ge4", "a_score_ge13", "a_trend_align", "a_room"),  # win=77.63 pf=4.37 n=76
+    ("a_sweep", "a_volume", "a_pre_total_ge4", "a_overlap", "a_room"),  # win=82.61 pf=4.37 n=23
+    ("a_pre_total_ge4", "a_score_ge13", "a_trend_align"),  # win=76.40 pf=4.35 n=89
+    ("a_volume", "a_pre_total_ge4", "a_fvg"),  # win=79.31 pf=4.33 n=145
+    ("a_pre_total_ge4", "a_score_ge13", "a_trend_align", "a_fvg", "a_room"),  # win=77.78 pf=4.32 n=72
+    ("a_sweep", "a_volume", "a_score_ge13", "a_wick_le_q1", "a_overlap"),  # win=80.95 pf=4.31 n=21
+    ("a_pre_total_ge4", "a_score_ge13", "a_trend_align", "a_fvg"),  # win=76.47 pf=4.30 n=85
+    ("a_volume", "a_score_ge13", "a_pre_total_ge1", "a_trend_align", "a_fvg"),  # win=77.92 pf=4.30 n=77
+    ("a_volume", "a_pre_total_ge4", "a_fvg", "a_room"),  # win=78.69 pf=4.29 n=122
+    ("a_score_ge13", "a_wick_le_q1", "a_pre_total_ge1", "a_trend_align", "a_fvg"),  # win=78.33 pf=4.29 n=60
+    ("a_score_ge13", "a_wick_le_q1", "a_pre_total_ge1", "a_trend_align"),  # win=77.42 pf=4.29 n=62
+    ("a_score_ge13", "a_wick_le_q1", "a_pre_total_ge1", "a_trend_align", "a_room"),  # win=79.17 pf=4.28 n=48
+    ("a_pre_total_ge4", "a_wick_le_q1", "a_fvg"),  # win=77.85 pf=4.28 n=149
+    ("a_sweep", "a_score_ge13", "a_pre_total_ge1"),  # win=78.79 pf=4.28 n=99
+    ("a_sweep", "a_score_ge13", "a_pre_total_ge1", "a_room"),  # win=80.49 pf=4.27 n=82
+    ("a_sweep", "a_volume", "a_pre_total_ge4", "a_fvg"),  # win=78.57 pf=4.26 n=98
+    ("a_pre_total_ge4", "a_wick_le_q1", "a_fvg", "a_room"),  # win=77.05 pf=4.25 n=122
+    ("a_sweep", "a_volume", "a_pre_total_ge4", "a_fvg", "a_room"),  # win=79.31 pf=4.23 n=87
+    ("a_pre_total_ge4", "a_sweep_count_2_4", "a_wick_le_q1", "a_fvg", "a_room"),  # win=78.95 pf=4.23 n=38
+    ("a_fvg", "a_overlap"),  # win=76.32 pf=4.23 n=76
+    ("a_overlap", "a_room"),  # win=76.79 pf=4.19 n=56
+    ("a_sweep", "a_volume", "a_pre_total_ge4", "a_wick_le_q1", "a_fvg"),  # win=78.12 pf=4.18 n=64
+    ("a_pre_total_ge4", "a_sweep_count_2_4", "a_wick_le_q1", "a_fvg"),  # win=76.09 pf=4.17 n=46
+    ("a_sweep", "a_pre_total_ge4", "a_fvg", "a_room"),  # win=76.98 pf=4.17 n=126
+    ("a_sweep", "a_pre_total_ge4", "a_fvg"),  # win=75.86 pf=4.17 n=145
+    ("a_volume", "a_pre_total_ge4", "a_wick_le_q1", "a_fvg"),  # win=80.21 pf=4.15 n=96
+    ("a_volume", "a_score_ge13", "a_wick_le_q1", "a_pre_total_ge1", "a_fvg"),  # win=83.58 pf=4.15 n=67
+    ("a_volume", "a_score_ge13", "a_wick_le_q1", "a_pre_total_ge1"),  # win=82.35 pf=4.14 n=68
+    ("a_volume", "a_pre_total_ge4", "a_score_ge13", "a_trend_align"),  # win=79.71 pf=4.13 n=69
+    ("a_sweep_count_2_4", "a_score_ge13", "a_room"),  # win=81.82 pf=4.10 n=33
+    ("a_volume", "a_pre_total_ge4", "a_score_ge13", "a_trend_align", "a_room"),  # win=79.66 pf=4.10 n=59
+    ("a_volume", "a_pre_total_ge4", "a_wick_le_q1", "a_fvg", "a_room"),  # win=78.95 pf=4.09 n=76
+    ("a_pre_total_ge4", "a_sweep_count_2_4", "a_score_ge13", "a_room"),  # win=81.25 pf=4.08 n=32
+    ("a_volume", "a_pre_total_ge4", "a_score_ge13", "a_wick_le_q1", "a_fvg"),  # win=86.67 pf=4.08 n=60
+    ("a_volume", "a_pre_total_ge4", "a_score_ge13", "a_wick_le_q1"),  # win=85.25 pf=4.08 n=61
+    ("a_volume", "a_pre_total_ge4", "a_score_ge13", "a_trend_align", "a_fvg"),  # win=80.30 pf=4.07 n=66
+    ("a_score_ge13", "a_pre_total_ge1", "a_trend_align", "a_overlap", "a_room"),  # win=79.41 pf=4.07 n=34
+    ("a_sweep_count_2_4", "a_score_ge13"),  # win=80.00 pf=4.07 n=40
+    ("a_pre_total_ge1", "a_trend_align", "a_overlap", "a_room"),  # win=77.14 pf=4.05 n=35
+    ("a_score_ge13", "a_pre_total_ge1", "a_trend_align", "a_overlap"),  # win=76.09 pf=4.04 n=46
+    ("a_pre_total_ge4", "a_sweep_count_2_4", "a_score_ge13"),  # win=78.95 pf=4.04 n=38
+    ("a_score_ge13", "a_overlap"),  # win=76.06 pf=4.04 n=71
+    ("a_sweep", "a_score_ge13", "a_wick_le_q1", "a_pre_total_ge1"),  # win=81.25 pf=4.03 n=64
+    ("a_pre_total_ge1", "a_trend_align", "a_overlap"),  # win=74.47 pf=4.03 n=47
+    ("a_score_ge13", "a_overlap", "a_room"),  # win=76.92 pf=4.00 n=52
+    ("a_sweep_count_2_4", "a_score_ge13", "a_fvg", "a_room"),  # win=80.65 pf=3.99 n=31
+    ("a_sweep", "a_score_ge13", "a_wick_le_q1", "a_pre_total_ge1", "a_room"),  # win=82.69 pf=3.98 n=52
+    ("a_volume", "a_pre_total_ge4", "a_score_ge13", "a_wick_le_q1", "a_room"),  # win=82.61 pf=3.97 n=46
+    ("a_pre_total_ge4", "a_sweep_count_2_4", "a_score_ge13", "a_fvg", "a_room"),  # win=80.00 pf=3.97 n=30
+    ("a_sweep_count_2_4", "a_score_ge13", "a_fvg"),  # win=78.95 pf=3.96 n=38
+    ("a_sweep", "a_sweep_count_2_4", "a_score_ge13", "a_room"),  # win=80.77 pf=3.96 n=26
+    ("a_volume", "a_score_ge13", "a_wick_le_q1", "a_pre_total_ge1", "a_room"),  # win=80.00 pf=3.95 n=50
+    ("a_pre_total_ge4", "a_sweep_count_2_4", "a_score_ge13", "a_fvg"),  # win=77.78 pf=3.93 n=36
+    ("a_sweep", "a_sweep_count_2_4", "a_score_ge13"),  # win=76.67 pf=3.89 n=30
+    ("a_sweep", "a_pre_total_ge4", "a_score_ge13"),  # win=79.52 pf=3.86 n=83
+    ("a_pre_total_ge4", "a_sweep_count_2_4", "a_wick_le_q1", "a_trend_align", "a_fvg"),  # win=74.07 pf=3.85 n=27
+    ("a_sweep", "a_pre_total_ge4", "a_score_ge13", "a_room"),  # win=80.56 pf=3.85 n=72
+    ("a_sweep", "a_score_ge13", "a_pre_total_ge1", "a_trend_align", "a_room"),  # win=78.69 pf=3.83 n=61
+    ("a_sweep", "a_pre_total_ge4", "a_score_ge13", "a_wick_le_q1"),  # win=82.14 pf=3.79 n=56
+    ("a_sweep", "a_pre_total_ge4", "a_score_ge13", "a_wick_le_q1", "a_room"),  # win=84.78 pf=3.77 n=46
+    ("a_sweep", "a_score_ge13", "a_pre_total_ge1", "a_trend_align"),  # win=75.00 pf=3.77 n=72
+    ("a_volume", "a_pre_total_ge4", "a_trend_align", "a_fvg"),  # win=75.29 pf=3.75 n=85
+    ("a_volume", "a_pre_total_ge4", "a_trend_align", "a_fvg", "a_room"),  # win=76.39 pf=3.75 n=72
+    ("a_sweep", "a_score_ge13"),  # win=76.92 pf=3.70 n=104
+    ("a_sweep", "a_score_ge13", "a_room"),  # win=79.07 pf=3.69 n=86
+    ("a_volume", "a_sweep_count_2_4", "a_wick_le_q1", "a_fvg", "a_room"),  # win=72.41 pf=3.68 n=29
+    ("a_pre_total_ge4", "a_fvg"),  # win=75.00 pf=3.62 n=216
+    ("a_volume", "a_score_ge13", "a_wick_le_q1", "a_pre_total_ge1", "a_trend_align"),  # win=79.55 pf=3.61 n=44
+    ("a_volume", "a_pre_total_ge4", "a_score_ge13", "a_wick_le_q1", "a_trend_align"),  # win=82.50 pf=3.61 n=40
+    ("a_pre_total_ge4", "a_fvg", "a_room"),  # win=74.73 pf=3.60 n=182
+    ("a_sweep", "a_volume", "a_wick_le_q1", "a_pre_total_ge1", "a_fvg"),  # win=70.07 pf=3.60 n=147
+    ("a_volume", "a_overlap"),  # win=79.63 pf=3.52 n=54
+    ("a_pre_total_ge4", "a_score_ge13", "a_trend_align", "a_overlap"),  # win=77.14 pf=3.52 n=35
+    ("a_pre_total_ge4", "a_score_ge13", "a_trend_align", "a_overlap", "a_room"),  # win=78.57 pf=3.51 n=28
+    ("a_pre_total_ge4", "a_trend_align", "a_overlap"),  # win=75.00 pf=3.51 n=36
+    ("a_pre_total_ge4", "a_trend_align", "a_overlap", "a_room"),  # win=75.86 pf=3.50 n=29
+    ("a_pre_total_ge4", "a_wick_le_q1", "a_trend_align", "a_fvg", "a_room"),  # win=71.83 pf=3.49 n=71
+    ("a_pre_total_ge4", "a_wick_le_q1", "a_trend_align", "a_fvg"),  # win=71.26 pf=3.49 n=87
+    ("a_volume", "a_sweep_count_2_4", "a_wick_le_q1", "a_fvg"),  # win=69.23 pf=3.49 n=39
+    ("a_sweep", "a_pre_total_ge4", "a_sweep_count_2_4", "a_wick_le_q1", "a_fvg"),  # win=70.59 pf=3.49 n=34
+    ("a_sweep", "a_pre_total_ge4", "a_score_ge13", "a_trend_align", "a_room"),  # win=77.78 pf=3.48 n=54
+    ("a_sweep", "a_score_ge13", "a_trend_align", "a_overlap", "a_room"),  # win=80.00 pf=3.48 n=25
+    ("a_sweep", "a_trend_align", "a_overlap", "a_room"),  # win=76.92 pf=3.47 n=26
+    ("a_volume", "a_pre_total_ge4", "a_wick_le_q1", "a_trend_align", "a_fvg"),  # win=77.36 pf=3.46 n=53
+    ("a_volume", "a_sweep_count_2_4", "a_score_ge13", "a_room"),  # win=80.00 pf=3.45 n=30
+    ("a_volume", "a_sweep_count_2_4", "a_score_ge13"),  # win=80.00 pf=3.45 n=35
+    ("a_sweep", "a_pre_total_ge4", "a_score_ge13", "a_trend_align"),  # win=75.41 pf=3.45 n=61
+    ("a_volume", "a_overlap", "a_room"),  # win=80.49 pf=3.44 n=41
+    ("a_volume", "a_pre_total_ge4", "a_sweep_count_2_4", "a_score_ge13", "a_room"),  # win=79.31 pf=3.44 n=29
+    ("a_score_ge13", "a_trend_align", "a_room"),  # win=75.27 pf=3.42 n=93
+    ("a_volume", "a_pre_total_ge4", "a_sweep_count_2_4", "a_score_ge13"),  # win=78.79 pf=3.42 n=33
+    ("a_score_ge13", "a_trend_align"),  # win=72.81 pf=3.41 n=114
+    ("a_score_ge13", "a_room"),  # win=75.41 pf=3.40 n=122
+    ("a_sweep", "a_score_ge13", "a_trend_align", "a_overlap"),  # win=72.73 pf=3.39 n=33
+    ("a_score_ge13", "a_wick_le_q1"),  # win=79.12 pf=3.38 n=91
+    ("a_score_ge13", "a_wick_le_q1", "a_fvg"),  # win=79.78 pf=3.38 n=89
+    ("a_sweep", "a_trend_align", "a_overlap"),  # win=70.59 pf=3.38 n=34
+    ("a_score_ge13", "a_fvg"),  # win=74.83 pf=3.37 n=151
+    ("a_sweep", "a_score_ge13", "a_wick_le_q1", "a_pre_total_ge1", "a_trend_align"),  # win=79.07 pf=3.35 n=43
+    ("a_volume", "a_sweep_count_2_4", "a_score_ge13", "a_fvg", "a_room"),  # win=78.57 pf=3.34 n=28
+    ("a_volume", "a_sweep_count_2_4", "a_score_ge13", "a_fvg"),  # win=78.79 pf=3.34 n=33
+    ("a_sweep", "a_volume", "a_score_ge13", "a_pre_total_ge1"),  # win=78.08 pf=3.34 n=73
+    ("a_volume", "a_score_ge13", "a_overlap"),  # win=78.85 pf=3.34 n=52
+    ("a_sweep", "a_volume", "a_pre_total_ge1", "a_fvg", "a_room"),  # win=70.79 pf=3.32 n=178
+    ("a_volume", "a_pre_total_ge4", "a_sweep_count_2_4", "a_score_ge13", "a_fvg"),  # win=77.42 pf=3.31 n=31
+    ("a_score_ge13", "a_fvg", "a_room"),  # win=75.21 pf=3.31 n=117
+    ("a_score_ge13", "a_trend_align", "a_fvg", "a_room"),  # win=75.00 pf=3.30 n=88
+    ("a_sweep", "a_volume", "a_score_ge13", "a_pre_total_ge1", "a_room"),  # win=79.37 pf=3.30 n=63
+    ("a_sweep", "a_pre_total_ge4", "a_score_ge13", "a_wick_le_q1", "a_trend_align"),  # win=78.95 pf=3.29 n=38
+    ("a_score_ge13", "a_trend_align", "a_fvg"),  # win=72.48 pf=3.29 n=109
+    ("a_sweep", "a_volume", "a_wick_le_q1", "a_fvg", "a_room"),  # win=71.43 pf=3.29 n=126
+    ("a_sweep", "a_volume", "a_wick_le_q1", "a_pre_total_ge1", "a_room"),  # win=69.33 pf=3.28 n=163
+    ("a_sweep", "a_volume", "a_wick_le_q1", "a_pre_total_ge1"),  # win=69.19 pf=3.27 n=211
+    ("a_score_ge13", "a_wick_le_q1", "a_room"),  # win=77.94 pf=3.27 n=68
+    ("a_score_ge13", "a_wick_le_q1", "a_fvg", "a_room"),  # win=78.79 pf=3.27 n=66
+    ("a_sweep", "a_volume", "a_pre_total_ge4", "a_score_ge13"),  # win=80.95 pf=3.26 n=63
+    ("a_sweep", "a_volume", "a_wick_le_q1", "a_fvg"),  # win=69.88 pf=3.26 n=166
+    ("a_volume", "a_score_ge13", "a_overlap", "a_room"),  # win=79.49 pf=3.25 n=39
+    ("a_sweep", "a_volume", "a_trend_align", "a_fvg", "a_room"),  # win=71.43 pf=3.24 n=119
+    ("a_sweep", "a_volume", "a_pre_total_ge4"),  # win=73.76 pf=3.22 n=202
+    ("a_sweep", "a_volume", "a_pre_total_ge4", "a_score_ge13", "a_room"),  # win=80.70 pf=3.22 n=57
+    ("a_score_ge13", "a_wick_le_q1", "a_trend_align"),  # win=76.19 pf=3.22 n=63
+    ("a_sweep", "a_volume", "a_pre_total_ge4", "a_room"),  # win=74.14 pf=3.22 n=174
+    ("a_score_ge13", "a_wick_le_q1", "a_trend_align", "a_fvg"),  # win=77.05 pf=3.22 n=61
+    ("a_sweep", "a_pre_total_ge4", "a_trend_align", "a_fvg", "a_room"),  # win=71.05 pf=3.22 n=76
+    ("a_sweep", "a_score_ge13", "a_wick_le_q1"),  # win=80.00 pf=3.21 n=65
+    ("a_volume", "a_pre_total_ge1", "a_trend_align", "a_overlap"),  # win=80.65 pf=3.21 n=31
+    ("a_sweep", "a_score_ge13", "a_trend_align", "a_room"),  # win=78.12 pf=3.20 n=64
+    ("a_score_ge13", "a_wick_le_q1", "a_trend_align", "a_room"),  # win=77.55 pf=3.20 n=49
+    ("a_score_ge13", "a_wick_le_q1", "a_trend_align", "a_fvg", "a_room"),  # win=78.72 pf=3.19 n=47
+    ("a_sweep", "a_volume", "a_sweep_count_2_4", "a_score_ge13", "a_room"),  # win=78.26 pf=3.19 n=23
+    ("a_sweep", "a_volume", "a_fvg", "a_room"),  # win=70.89 pf=3.17 n=213
+    ("a_sweep", "a_score_ge13", "a_trend_align"),  # win=74.67 pf=3.17 n=75
+    ("a_sweep", "a_volume", "a_pre_total_ge1", "a_trend_align", "a_room"),  # win=70.00 pf=3.17 n=150
+    ("a_sweep", "a_volume", "a_sweep_count_2_4", "a_score_ge13"),  # win=76.00 pf=3.16 n=25
+    ("a_sweep", "a_volume", "a_pre_total_ge1", "a_room"),  # win=69.81 pf=3.16 n=308
+    ("a_volume", "a_pre_total_ge1", "a_trend_align", "a_overlap", "a_room"),  # win=83.33 pf=3.16 n=24
+    ("a_sweep", "a_score_ge13", "a_wick_le_q1", "a_room"),  # win=81.13 pf=3.16 n=53
+    ("a_sweep_count_2_4", "a_score_ge13", "a_trend_align", "a_room"),  # win=76.92 pf=3.15 n=26
+    ("a_sweep", "a_volume", "a_pre_total_ge4", "a_trend_align", "a_fvg"),  # win=73.21 pf=3.14 n=56
+    ("a_volume", "a_sweep_count_2_4", "a_fvg", "a_room"),  # win=70.37 pf=3.13 n=54
+    ("a_score_ge13", "a_wick_le_q1", "a_trend_align", "a_overlap"),  # win=79.31 pf=3.12 n=29
+    ("a_sweep", "a_volume", "a_room"),  # win=69.77 pf=3.11 n=354
+    ("a_sweep_count_2_4", "a_score_ge13", "a_trend_align"),  # win=73.33 pf=3.11 n=30
+    ("a_wick_le_q1", "a_trend_align", "a_overlap"),  # win=76.67 pf=3.11 n=30
+    ("a_pre_total_ge4", "a_sweep_count_2_4", "a_score_ge13", "a_trend_align"),  # win=72.41 pf=3.10 n=29
+    ("a_volume", "a_score_ge13"),  # win=75.61 pf=3.09 n=123
+    ("a_sweep", "a_volume", "a_score_ge13", "a_wick_le_q1", "a_pre_total_ge1"),  # win=80.85 pf=3.09 n=47
+    ("a_score_ge13", "a_wick_le_q1", "a_trend_align", "a_overlap", "a_room"),  # win=80.95 pf=3.06 n=21
+    ("a_volume", "a_sweep_count_2_4", "a_fvg"),  # win=70.59 pf=3.06 n=68
+    ("a_sweep", "a_volume", "a_pre_total_ge4", "a_score_ge13", "a_wick_le_q1"),  # win=83.33 pf=3.05 n=42
+    ("a_wick_le_q1", "a_trend_align", "a_overlap", "a_room"),  # win=77.27 pf=3.05 n=22
+    ("a_volume", "a_score_ge13", "a_trend_align"),  # win=74.42 pf=3.04 n=86
+    ("a_volume", "a_score_ge13", "a_trend_align", "a_room"),  # win=77.14 pf=3.04 n=70
+    ("a_sweep_count_2_4", "a_score_ge13", "a_trend_align", "a_fvg", "a_room"),  # win=75.00 pf=3.03 n=24
+    ("a_volume", "a_score_ge13", "a_room"),  # win=76.84 pf=3.02 n=95
+    ("a_sweep", "a_volume", "a_trend_align", "a_room"),  # win=70.39 pf=3.00 n=179
+    ("a_sweep_count_2_4", "a_score_ge13", "a_trend_align", "a_fvg"),  # win=71.43 pf=3.00 n=28
+    ("a_pre_total_ge4", "a_sweep_count_2_4", "a_score_ge13", "a_trend_align", "a_fvg"),  # win=70.37 pf=2.99 n=27
+    ("a_volume", "a_pre_total_ge4", "a_trend_align", "a_overlap"),  # win=84.00 pf=2.99 n=25
+    ("a_volume", "a_score_ge13", "a_fvg"),  # win=76.27 pf=2.98 n=118
+    ("a_volume", "a_pre_total_ge4"),  # win=72.17 pf=2.95 n=309
+    ("a_pre_total_ge4", "a_trend_align", "a_fvg", "a_room"),  # win=70.00 pf=2.94 n=110
+    ("a_volume", "a_wick_le_q1", "a_pre_total_ge1", "a_fvg", "a_room"),  # win=69.33 pf=2.94 n=163
+    ("a_sweep", "a_pre_total_ge4", "a_sweep_count_2_4", "a_fvg", "a_room"),  # win=72.09 pf=2.92 n=43
+    ("a_volume", "a_pre_total_ge4", "a_room"),  # win=71.26 pf=2.91 n=254
+    ("a_volume", "a_score_ge13", "a_fvg", "a_room"),  # win=76.92 pf=2.91 n=91
+    ("a_sweep", "a_pre_total_ge4", "a_sweep_count_2_4", "a_fvg"),  # win=70.59 pf=2.90 n=51
+    ("a_volume", "a_score_ge13", "a_trend_align", "a_fvg"),  # win=74.39 pf=2.90 n=82
+    ("a_volume", "a_pre_total_ge4", "a_trend_align", "a_overlap", "a_room"),  # win=80.95 pf=2.90 n=21
+    ("a_volume", "a_score_ge13", "a_trend_align", "a_fvg", "a_room"),  # win=77.27 pf=2.89 n=66
+    ("a_pre_total_ge4", "a_score_ge13", "a_wick_le_q1", "a_trend_align", "a_overlap"),  # win=76.92 pf=2.89 n=26
+    ("a_pre_total_ge4", "a_wick_le_q1", "a_trend_align", "a_overlap"),  # win=74.07 pf=2.88 n=27
+    ("a_pre_total_ge4", "a_wick_le_q1", "a_trend_align", "a_overlap", "a_room"),  # win=75.00 pf=2.84 n=20
+    ("a_volume", "a_score_ge13", "a_wick_le_q1", "a_fvg"),  # win=81.16 pf=2.84 n=69
+    ("a_sweep", "a_volume", "a_score_ge13"),  # win=75.32 pf=2.84 n=77
+    ("a_sweep", "a_sweep_count_2_4", "a_score_ge13", "a_trend_align", "a_room"),  # win=75.00 pf=2.84 n=20
+    ("a_volume", "a_score_ge13", "a_wick_le_q1"),  # win=80.00 pf=2.84 n=70
+    ("a_sweep", "a_volume", "a_pre_total_ge4", "a_wick_le_q1"),  # win=71.70 pf=2.84 n=106
+    ("a_volume", "a_pre_total_ge1", "a_fvg", "a_room"),  # win=69.11 pf=2.84 n=259
+    ("a_sweep", "a_volume", "a_score_ge13", "a_room"),  # win=77.27 pf=2.81 n=66
+    ("a_sweep", "a_volume", "a_pre_total_ge4", "a_wick_le_q1", "a_room"),  # win=70.79 pf=2.80 n=89
+    ("a_sweep", "a_sweep_count_2_4", "a_score_ge13", "a_trend_align"),  # win=69.57 pf=2.79 n=23
+    ("a_sweep", "a_volume", "a_score_ge13", "a_pre_total_ge1", "a_trend_align"),  # win=74.51 pf=2.72 n=51
+    ("a_volume", "a_score_ge13", "a_wick_le_q1", "a_fvg", "a_room"),  # win=78.43 pf=2.71 n=51
+    ("a_volume", "a_score_ge13", "a_wick_le_q1", "a_room"),  # win=76.92 pf=2.71 n=52
+    ("a_sweep", "a_pre_total_ge4", "a_trend_align", "a_overlap", "a_room"),  # win=72.73 pf=2.71 n=22
+    ("a_sweep", "a_pre_total_ge4", "a_score_ge13", "a_trend_align", "a_overlap"),  # win=72.00 pf=2.68 n=25
+    ("a_volume", "a_pre_total_ge4", "a_wick_le_q1"),  # win=70.81 pf=2.67 n=161
+    ("a_sweep", "a_pre_total_ge4", "a_trend_align", "a_overlap"),  # win=69.23 pf=2.67 n=26
+    ("a_sweep", "a_volume", "a_pre_total_ge4", "a_trend_align", "a_room"),  # win=73.03 pf=2.66 n=89
+    ("a_pre_total_ge4", "a_sweep_count_2_4", "a_fvg", "a_room"),  # win=73.44 pf=2.66 n=64
+    ("a_pre_total_ge4", "a_sweep_count_2_4", "a_fvg"),  # win=72.97 pf=2.65 n=74
+    ("a_sweep", "a_volume", "a_pre_total_ge4", "a_score_ge13", "a_trend_align"),  # win=77.78 pf=2.64 n=45
+    ("a_sweep", "a_volume", "a_pre_total_ge4", "a_trend_align"),  # win=70.75 pf=2.64 n=106
+    ("a_score_ge13", "a_trend_align", "a_overlap"),  # win=71.43 pf=2.61 n=49
+    ("a_score_ge13", "a_trend_align", "a_overlap", "a_room"),  # win=75.00 pf=2.60 n=36
+    ("a_volume", "a_score_ge13", "a_wick_le_q1", "a_trend_align", "a_fvg"),  # win=79.55 pf=2.60 n=44
+    ("a_trend_align", "a_overlap"),  # win=70.00 pf=2.60 n=50
+    ("a_volume", "a_score_ge13", "a_wick_le_q1", "a_trend_align"),  # win=77.78 pf=2.60 n=45
+    ("a_trend_align", "a_overlap", "a_room"),  # win=72.97 pf=2.60 n=37
+    ("a_volume", "a_score_ge13", "a_wick_le_q1", "a_trend_align", "a_room"),  # win=77.14 pf=2.55 n=35
+    ("a_volume", "a_pre_total_ge4", "a_trend_align", "a_room"),  # win=69.23 pf=2.52 n=143
+    ("a_volume", "a_sweep_count_2_4", "a_score_ge13", "a_trend_align", "a_room"),  # win=73.91 pf=2.50 n=23
+    ("a_volume", "a_sweep_count_2_4", "a_score_ge13", "a_trend_align"),  # win=73.08 pf=2.49 n=26
+    ("a_volume", "a_pre_total_ge4", "a_sweep_count_2_4", "a_score_ge13", "a_trend_align"),  # win=72.00 pf=2.48 n=25
+    ("a_sweep", "a_score_ge13", "a_wick_le_q1", "a_trend_align", "a_room"),  # win=80.56 pf=2.44 n=36
+    ("a_sweep", "a_volume", "a_score_ge13", "a_wick_le_q1"),  # win=79.17 pf=2.43 n=48
+    ("a_sweep", "a_score_ge13", "a_wick_le_q1", "a_trend_align"),  # win=77.27 pf=2.43 n=44
+    ("a_volume", "a_wick_le_q1", "a_trend_align", "a_overlap"),  # win=85.00 pf=2.40 n=20
+    ("a_sweep", "a_score_ge13", "a_wick_le_q1", "a_trend_align", "a_overlap"),  # win=76.19 pf=2.40 n=21
+    ("a_sweep", "a_wick_le_q1", "a_trend_align", "a_overlap"),  # win=72.73 pf=2.38 n=22
+    ("a_volume", "a_sweep_count_2_4", "a_score_ge13", "a_trend_align", "a_fvg"),  # win=70.83 pf=2.38 n=24
+    ("a_sweep", "a_volume", "a_score_ge13", "a_wick_le_q1", "a_room"),  # win=78.05 pf=2.37 n=41
+    ("a_sweep", "a_volume", "a_score_ge13", "a_trend_align", "a_room"),  # win=76.60 pf=2.25 n=47
+    ("a_sweep", "a_volume", "a_score_ge13", "a_trend_align"),  # win=73.58 pf=2.24 n=53
+    ("a_pre_total_ge4", "a_sweep_count_2_4", "a_trend_align", "a_fvg", "a_room"),  # win=70.73 pf=2.14 n=41
+    ("a_volume", "a_trend_align", "a_overlap"),  # win=73.53 pf=1.90 n=34
+    ("a_volume", "a_trend_align", "a_overlap", "a_room"),  # win=76.92 pf=1.87 n=26
+    ("a_sweep", "a_volume", "a_trend_align", "a_overlap"),  # win=70.00 pf=1.85 n=20
+    ("a_sweep", "a_volume", "a_score_ge13", "a_wick_le_q1", "a_trend_align"),  # win=76.67 pf=1.61 n=30
+]
+
+# Pre-converted to frozenset for fast matching
+_WIN69_COMBO_SETS = [frozenset(c) for c in WIN69_CANONICAL_COMBOS]
+
+
+def passes_win69_union(atoms_dict):
+    """
+    atoms_dict 가 319 canonical Win>=69% 조합 중 하나라도 매칭되는지 체크.
+    
+    Args:
+        atoms_dict: {a_sweep: bool, a_volume: bool, ...}
+    
+    Returns:
+        bool: True면 IN union 포함 (Tier B 이상 승격 가능)
+    """
+    # True 인 atoms 만 set 으로
+    active = frozenset(k for k, v in atoms_dict.items() if v)
+    for combo_set in _WIN69_COMBO_SETS:
+        if combo_set.issubset(active):
+            return True
+    return False
+
+
+
+# =========================================================
+# Stage 4H Tier 분류 (atomic 12 컨디션 기반)
+# =========================================================
+def classify_tier_stage4h(atoms_dict: Dict[str, bool], side: str = "long") -> str:
+    """
+    Stage 4H Tier 판정 — SWEEP_BASE 를 GEM/ROOM_FVG/ROOM_ONLY 로 세분화.
+    
+    Returns: tier_label (string)
+      "ALPHA_MAX" | "ALPHA_HIGH" | "ALPHA_MED"
+      "SWEEP_GEM" | "SWEEP_ROOM_FVG" | "SWEEP_ROOM_ONLY"
+      "COMPLETE_OUT" | "SKIP_MSS"
+    """
+    def _g(k): return bool(atoms_dict.get(k, False))
+    vol = _g("a_volume"); ovl = _g("a_overlap"); swp = _g("a_sweep")
+    s13 = _g("a_score_ge13"); p1 = _g("a_pre_total_ge1")
+    p4  = _g("a_pre_total_ge4"); wq1 = _g("a_wick_le_q1")
+    mss = _g("a_mss"); fvg = _g("a_fvg"); rm  = _g("a_room")
+    
+    any_alpha = (vol or ovl or swp or s13 or p4)
+    
+    # SKIP_MSS
+    if mss and not any_alpha:
+        return "SKIP_MSS"
+    
+    # ALPHA_MAX
+    if ovl and not vol:
+        return "ALPHA_MAX"
+    if s13 and p1 and not ovl:
+        return "ALPHA_MAX"
+    
+    # ALPHA_HIGH
+    if vol and ovl and (p1 or p4 or wq1 or s13):
+        return "ALPHA_HIGH"
+    if swp and vol and not ovl:
+        return "ALPHA_HIGH"
+    
+    # ALPHA_MED
+    if passes_win69_union(atoms_dict):
+        return "ALPHA_MED"
+    
+    # SWEEP_BASE 세분화
+    if swp:
+        if not rm:
+            return "SWEEP_GEM"         # sweep + NOT room
+        elif fvg:
+            return "SWEEP_ROOM_FVG"    # sweep + room + fvg
+        else:
+            return "SWEEP_ROOM_ONLY"   # sweep + room + NOT fvg
+    
+    # COMPLETE_OUT
+    return "COMPLETE_OUT"
+
+
+# =========================================================
+# Stage 4H Tier 별 risk mult (4I 차단 + scenario 반영)
+# =========================================================
+def get_tier_risk_mult_4h(tier_label: str, side: str = "long",
+                          symbol: Optional[str] = None) -> float:
+    """Tier 별 risk mult — scenario 설정 반영 + Stage 4I 차단 규칙."""
+    if tier_label == "SKIP_MSS":
+        return 0.0
+    
+    # ALPHA_MED side-aware
+    if tier_label == "ALPHA_MED":
+        return ALPHA_MED_RISK_LONG if side == "long" else ALPHA_MED_RISK_SHORT
+    
+    # COMPLETE_OUT
+    if tier_label == "COMPLETE_OUT":
+        if OUT_BEHAVIOR == "skip":
+            return 0.0
+        elif OUT_BEHAVIOR == "keep_r1":
+            return 1.0
+        elif OUT_BEHAVIOR == "keep_r05":
+            return 0.5
+        return 0.0
+    
+    # ─── Stage 4I 차단 규칙 ───
+    if tier_label == "SWEEP_GEM" and GEM_LONG_ONLY and side == "short":
+        return 0.0
+    if tier_label == "SWEEP_ROOM_ONLY" and symbol is not None and symbol in ROOM_ONLY_SYMBOL_BLACKLIST:
+        return 0.0
+    
+    # SWEEP 계열 — scenario 에 따라
+    if tier_label in ("SWEEP_GEM", "SWEEP_ROOM_FVG", "SWEEP_ROOM_ONLY"):
+        return SWEEP_RISK_BY_SCENARIO[SCENARIO][tier_label]
+    
+    # 공통 Tier
+    return TIER_RISK_MULT_COMMON.get(tier_label, 1.0)
+
+
+def get_tier_cap_4h(tier_label: str) -> float:
+    """Tier 별 notional cap. ALPHA tier 는 사실상 무제한."""
+    return TIER_CAP_4H.get(tier_label, 3.0)
+
+
+# =========================================================
+# Stage 4J: 추가 차단 + booster matrix
+# =========================================================
+def is_stage4j_blocked(tier: str, side: str, symbol: str,
+                       run_potential: Optional[int]) -> Optional[str]:
+    """outlier 1건 의존 그룹 차단 (BTC R=167, AVAX R=33)."""
+    rp = int(run_potential) if run_potential is not None else -1
+    # GEM LONG RP1 — BTC R=167 한 건 의존
+    if tier == "SWEEP_GEM" and side == "long" and rp == 1:
+        return "GEM_LONG_RP1_outlier_dep"
+    # ROOM_ONLY AVAX — AVAX R=33 한 건 의존
+    if tier == "SWEEP_ROOM_ONLY" and symbol == "AVAXUSDT":
+        return "ROOM_ONLY_AVAX_outlier_dep"
+    return None
+
+
+def get_stage4j_extra_mult(tier: str, side: str, symbol: str,
+                           run_potential: Optional[int]) -> Tuple[float, str]:
+    """
+    Stage 4J extra mult layer (1.5× / 1.2× / 1.0× booster).
+    차단 통과한 거래에 한해 호출.
+    """
+    rp = int(run_potential) if run_potential is not None else -1
+    
+    # ── 1.5× booster ──
+    if tier == "SWEEP_ROOM_FVG" and symbol == "DOGEUSDT":
+        return (1.5, "BOOST15_FVG_DOGE")
+    if tier == "SWEEP_GEM" and side == "long" and rp == 2:
+        return (1.5, "BOOST15_GEM_LONG_RP2")
+    
+    # ── 1.2× booster ──
+    if tier == "SWEEP_GEM" and side == "long" and rp == 0:
+        return (1.2, "BOOST12_GEM_LONG_RP0")
+    if tier == "SWEEP_ROOM_ONLY" and symbol == "ADAUSDT":
+        return (1.2, "BOOST12_ROOM_ONLY_ADA")
+    if tier == "SWEEP_ROOM_ONLY" and side == "long" and rp == 1 and symbol != "ADAUSDT":
+        return (1.2, "BOOST12_ROOM_ONLY_LONG_RP1")
+    if tier == "SWEEP_ROOM_FVG" and side == "long" and rp == 2 and symbol != "DOGEUSDT":
+        return (1.2, "BOOST12_FVG_LONG_RP2")
+    
+    return (1.0, "DEFAULT")
+
+
+# =========================================================
+# Stage 4K: Sentiment Momentum lookback (실전 버전)
+# 백테스트는 executed_trades list, 실전은 trade_journal.csv 에서 자동 로드
+# =========================================================
+def _load_recent_journal_for_sentiment(now_utc: datetime,
+                                        days: int = 14) -> List[Dict[str, Any]]:
+    """trade_journal.csv 에서 직전 days 일 거래 추출."""
+    try:
+        from log_store import load_trade_journal_rows
+        rows = load_trade_journal_rows(limit=500)
+    except Exception:
+        return []
+    
+    cutoff = now_utc - timedelta(days=days)
+    result = []
+    for r in rows:
+        opened_at = str(r.get("opened_at", "") or "")
+        if not opened_at:
+            continue
+        try:
+            ot = datetime.fromisoformat(opened_at.replace("Z", "+00:00"))
+            if ot.tzinfo is None:
+                ot = ot.replace(tzinfo=timezone.utc)
+        except Exception:
+            continue
+        if ot < cutoff or ot >= now_utc:
+            continue
+        side = str(r.get("side", "") or "").lower()
+        rp_raw = r.get("run_potential")
+        if side not in ("long", "short") or rp_raw is None or rp_raw == "":
+            continue
+        try:
+            rp_int = int(float(rp_raw))
+        except Exception:
+            continue
+        result.append({"entry_time": ot, "side": side, "run_potential": rp_int})
+    return result
+
+
+def compute_sentiment_lookback(target_time,
+                                executed_trades_so_far: Optional[List[Dict[str, Any]]] = None,
+                                days: int = 7) -> Tuple[Optional[float], int]:
+    """
+    target_time 직전 days 일의 모든 체결 거래 → LONG/SHORT RP 평균 격차.
+    
+    실전 모드: executed_trades_so_far=None 이면 trade_journal 에서 자동 로드
+    백테스트 모드: executed_trades_so_far list 직접 전달
+    
+    Returns: (sentiment, n_window) — 측정 불가시 (None, n)
+    """
+    # target_time 정규화
+    if isinstance(target_time, str):
+        try:
+            target_time = datetime.fromisoformat(target_time.replace("Z", "+00:00"))
+        except Exception:
+            return None, 0
+    if hasattr(target_time, "to_pydatetime"):
+        target_time = target_time.to_pydatetime()
+    if isinstance(target_time, datetime) and target_time.tzinfo is None:
+        target_time = target_time.replace(tzinfo=timezone.utc)
+    
+    if executed_trades_so_far is None:
+        # 실전: trade_journal 에서 로드 (직전 14일치 cushion)
+        executed_trades_so_far = _load_recent_journal_for_sentiment(
+            target_time, days=days + SENTIMENT_PREV_OFFSET
+        )
+    
+    if not executed_trades_so_far:
+        return None, 0
+    
+    cutoff = target_time - timedelta(days=days)
+    long_rps: List[int] = []
+    short_rps: List[int] = []
+    for tr in executed_trades_so_far:
+        et = tr.get("entry_time")
+        if et is None:
+            continue
+        # entry_time 정규화
+        if isinstance(et, str):
+            try:
+                et = datetime.fromisoformat(et.replace("Z", "+00:00"))
+            except Exception:
+                continue
+        if hasattr(et, "to_pydatetime"):
+            et = et.to_pydatetime()
+        if isinstance(et, datetime) and et.tzinfo is None:
+            et = et.replace(tzinfo=timezone.utc)
+        
+        if et >= target_time:
+            continue
+        if et < cutoff:
+            continue
+        rp = tr.get("run_potential")
+        side = tr.get("side")
+        if rp is None or side not in ("long", "short"):
+            continue
+        try:
+            rp_int = int(rp)
+        except Exception:
+            continue
+        if side == "long":
+            long_rps.append(rp_int)
+        else:
+            short_rps.append(rp_int)
+    
+    n_total = len(long_rps) + len(short_rps)
+    if len(long_rps) < SENTIMENT_MIN_SAMPLES or len(short_rps) < SENTIMENT_MIN_SAMPLES:
+        return None, n_total
+    return (float(np.mean(long_rps)) - float(np.mean(short_rps))), n_total
+
+
+def get_stage4k_sentiment_mult(target_time,
+                                side: str,
+                                executed_trades_so_far: Optional[List[Dict[str, Any]]] = None,
+                                scenario: Optional[str] = None) -> Tuple[float, str]:
+    """
+    Stage 4K Sentiment Momentum 매트릭스 적용 (4 booster + 3 cut).
+    
+    cell:
+      BOOST_TopReversal     : sent>+0.3, chg>+0.2, SHORT  → BOOST mult
+      BOOST_BottomReversal  : sent<-0.3, chg<-0.2, LONG   → BOOST mult
+      BOOST_TrendStart_L    : |sent|<=0.3, chg>+0.2, LONG  → BOOST mult
+      BOOST_TrendStart_S    : |sent|<=0.3, chg>+0.2, SHORT → BOOST mult
+      CUT_NeutStable_S      : |sent|<=0.3, |chg|<=0.2, SHORT → CUT mult
+      CUT_NeutFalling_S     : |sent|<=0.3, chg<-0.2, SHORT  → CUT mult
+      CUT_ShortStable_L     : sent<-0.3, |chg|<=0.2, LONG   → CUT mult
+    
+    측정 불가 시 (1.0, "no_data"). cell 매트릭스 외 (1.0, "default").
+    """
+    if scenario is None:
+        scenario = SCENARIO
+    cfg = SENTIMENT_BOOSTER_BY_SCENARIO.get(scenario)
+    if cfg is None:
+        return (1.0, "no_scenario")
+    
+    # target_time 정규화
+    if isinstance(target_time, str):
+        try:
+            target_time = datetime.fromisoformat(target_time.replace("Z", "+00:00"))
+        except Exception:
+            return (1.0, "no_data")
+    if hasattr(target_time, "to_pydatetime"):
+        target_time = target_time.to_pydatetime()
+    if isinstance(target_time, datetime) and target_time.tzinfo is None:
+        target_time = target_time.replace(tzinfo=timezone.utc)
+    
+    s_now, _  = compute_sentiment_lookback(target_time, executed_trades_so_far,
+                                            days=SENTIMENT_LOOKBACK_DAYS)
+    s_prev, _ = compute_sentiment_lookback(
+        target_time - timedelta(days=SENTIMENT_PREV_OFFSET),
+        executed_trades_so_far, days=SENTIMENT_LOOKBACK_DAYS
+    )
+    if s_now is None or s_prev is None:
+        return (1.0, "no_data")
+    
+    chg = s_now - s_prev
+    BOOST = float(cfg["BOOST"])
+    CUT   = float(cfg["CUT"])
+    
+    # ── 강력 4 BOOSTER ──
+    if s_now > 0.3 and chg > 0.2 and side == "short":
+        return (BOOST, "BOOST_TopReversal")        # PF 15.51
+    if s_now < -0.3 and chg < -0.2 and side == "long":
+        return (BOOST, "BOOST_BottomReversal")     # PF 7.31
+    if abs(s_now) <= 0.3 and chg > 0.2 and side == "long":
+        return (BOOST, "BOOST_TrendStart_L")       # PF 8.77
+    if abs(s_now) <= 0.3 and chg > 0.2 and side == "short":
+        return (BOOST, "BOOST_TrendStart_S")       # PF 5.22
+    
+    # ── 약점 3 CUT ──
+    if abs(s_now) <= 0.3 and abs(chg) <= 0.2 and side == "short":
+        return (CUT, "CUT_NeutStable_S")           # PF 0.35
+    if abs(s_now) <= 0.3 and chg < -0.2 and side == "short":
+        return (CUT, "CUT_NeutFalling_S")          # PF 0.74
+    if s_now < -0.3 and abs(chg) <= 0.2 and side == "long":
+        return (CUT, "CUT_ShortStable_L")          # PF 0.47
+    
+    return (1.0, "default")
+
+
+# =========================================================
+# atomic 12 컨디션 계산 (백테스트 compute_trade_tags 그대로)
+# =========================================================
+def compute_trade_tags(df_struct: pd.DataFrame, entry_idx: int, zone_created_idx: int,
+                       zone_low: float, zone_high: float, side: str,
+                       pre_total: int, sweep_count: int, score: float, wick_ratio_5: float,
+                       structure_reasons: str, atr_val: float) -> Dict[str, bool]:
+    """
+    12개 atomic 태그 계산 (Stage 4H tier 분류 입력).
+    """
+    tags: Dict[str, bool] = {}
+
+    # ─── Entry Signal (2개) ───
+    # SWEEP
+    start = max(0, entry_idx - SWEEP_LOOKBACK_BARS)
+    end = entry_idx
+    try:
+        if side == "long":
+            pivot_sw = df_struct.loc[start:end, "pivot_sweep_low"].any() if "pivot_sweep_low" in df_struct.columns else False
+            recent_sw = df_struct.loc[start:end, "recent_sweep_low"].any() if "recent_sweep_low" in df_struct.columns else False
+        else:
+            pivot_sw = df_struct.loc[start:end, "pivot_sweep_high"].any() if "pivot_sweep_high" in df_struct.columns else False
+            recent_sw = df_struct.loc[start:end, "recent_sweep_high"].any() if "recent_sweep_high" in df_struct.columns else False
+        tags["a_sweep"] = bool(pivot_sw or recent_sw)
+    except Exception:
+        tags["a_sweep"] = False
+
+    # VOLUME spike
+    try:
+        if "volume" in df_struct.columns:
+            vstart = max(0, zone_created_idx - VOLUME_AVG_WINDOW)
+            vend = zone_created_idx
+            if vend <= vstart:
+                tags["a_volume"] = False
+            else:
+                avg_vol = df_struct.loc[vstart:vend - 1, "volume"].mean()
+                zone_vol = df_struct.loc[zone_created_idx, "volume"]
+                if pd.isna(avg_vol) or avg_vol <= 0:
+                    tags["a_volume"] = False
+                else:
+                    tags["a_volume"] = bool((zone_vol / avg_vol) >= VOLUME_SPIKE_MULT)
+        else:
+            tags["a_volume"] = False
+    except Exception:
+        tags["a_volume"] = False
+
+    # ─── Tier 구성 5개 ───
+    pt = int(pre_total) if pre_total is not None and not pd.isna(pre_total) else 0
+    sc = int(sweep_count) if sweep_count is not None and not pd.isna(sweep_count) else 0
+    sv = float(score) if score is not None and not pd.isna(score) else 0.0
+    wv = wick_ratio_5
+
+    tags["a_pre_total_ge4"]   = (pt >= 4)
+    tags["a_sweep_count_2_4"] = (2 <= sc <= 4)
+    tags["a_score_ge13"]      = (sv >= 13.0)
+    tags["a_wick_le_q1"]      = (wv is not None) and (not pd.isna(wv)) and (wv <= WICK_RATIO_5_Q1_THRESHOLD)
+    tags["a_pre_total_ge1"]   = (pt >= 1)
+
+    # ─── RP 구성 5개 ───
+    reasons = str(structure_reasons) if structure_reasons is not None else ""
+    reasons_set = set(r.strip() for r in reasons.split(",") if r.strip())
+
+    # trend_align
+    try:
+        h4_trend = df_struct.loc[entry_idx, "trend"] if "trend" in df_struct.columns else "neutral"
+    except Exception:
+        h4_trend = "neutral"
+    tags["a_trend_align"] = (side == "long" and h4_trend == "up") or \
+                             (side == "short" and h4_trend == "down")
+
+    tags["a_mss"]     = ("bull_mss" in reasons_set) or ("bear_mss" in reasons_set)
+    tags["a_fvg"]     = ("valid_bull_fvg" in reasons_set) or ("valid_bear_fvg" in reasons_set)
+    tags["a_overlap"] = ("bull_ob_fvg_overlap" in reasons_set) or \
+                         ("bear_ob_fvg_overlap" in reasons_set)
+
+    # a_room: get_run_potential 결과 (room) 직접 접근 어렵 → atr 기반 근사
+    a_room = False
+    try:
+        if pd.notna(atr_val) and atr_val > 0:
+            if side == "long":
+                entry_proxy = zone_low + (zone_high - zone_low) * 0.40
+                room_target = df_struct.loc[entry_idx, "pd_high"] if "pd_high" in df_struct.columns else np.nan
+                if pd.notna(room_target):
+                    risk_est = max(atr_val * SL_BUFFER_MULT, 1e-9)
+                    room_est = max(float(room_target) - entry_proxy, 0.0)
+                    a_room = (room_est >= risk_est * 2.8)
+            else:
+                entry_proxy = zone_low + (zone_high - zone_low) * 0.60
+                room_target = df_struct.loc[entry_idx, "pd_low"] if "pd_low" in df_struct.columns else np.nan
+                if pd.notna(room_target):
+                    risk_est = max(atr_val * SL_BUFFER_MULT, 1e-9)
+                    room_est = max(entry_proxy - float(room_target), 0.0)
+                    a_room = (room_est >= risk_est * 2.8)
+    except Exception:
+        a_room = False
+    tags["a_room"] = bool(a_room)
+
+    return tags
+
+
+# =========================================================
+# Stage 4K notional cap (TIER_CAP_4H 기반)
+# =========================================================
+def resolve_notional_cap(tier_label: str) -> float:
+    """Tier 별 notional cap. ALPHA tier 는 사실상 무제한 (999×)."""
+    return float(TIER_CAP_4H.get(tier_label, MAX_NOTIONAL_MULT))
+
+
+# =========================================================
+# RP boost filter (백테스트 RP_MULT_4H 사용)
+# =========================================================
+def apply_rp_filter(tier_mult: float, run_potential: Optional[int]) -> Tuple[str, float]:
+    """
+    RP boost 적용. 백테스트 RP_MULT_4H 매핑.
+    
+    RP_MULT_4H = {0: 1.5, 1~5: 1.0}  → RP0 만 1.5× boost, RP6+ 는 SKIP
+    """
+    if not RP_FILTER_ENABLE:
+        return "rp_disabled", float(tier_mult)
+    if run_potential is None:
+        return "rp_pass", float(tier_mult)
+    try:
+        rp = int(run_potential)
+    except Exception:
+        return "rp_pass", float(tier_mult)
+    
+    if rp not in RP_MULT_4H:
+        return f"rp_skip_rp{rp}", 0.0
+    
+    mult = float(RP_MULT_4H[rp])
+    if mult <= 0.0:
+        return f"rp_skip_rp{rp}", 0.0
+    if mult > 1.0:
+        return f"rp_boost_rp{rp}_x{mult}", float(tier_mult) * mult
+    if mult < 1.0:
+        return f"rp_damp_rp{rp}_x{mult}", float(tier_mult) * mult
+    return "rp_pass", float(tier_mult)
+
+
+# =========================================================
+# (deprecated) v1.9b classify_tier_v19b — 4K 시스템에서 미사용
+# 호출시 4K 시스템으로 전환되어 있어야 함을 알림
+# =========================================================
+def classify_tier_v19b(*args, **kwargs):
+    raise DeprecationWarning(
+        "v1.9b tier 시스템 폐기. classify_tier_stage4h 사용 (Stage 4K)"
+    )
+
+
+
+
+def has_recent_h1_choch(df_h1_local: pd.DataFrame, h4_timestamp: pd.Timestamp, side: str, lookback_hours: int = 16) -> bool:
+    start_ts = h4_timestamp - pd.Timedelta(hours=lookback_hours)
+    end_ts = h4_timestamp
+
+    win = df_h1_local[
+        (df_h1_local["timestamp"] > start_ts) &
+        (df_h1_local["timestamp"] <= end_ts)
+    ]
+
+    if len(win) == 0:
+        return False
+
+    if side == "long":
+        return bool(win["bull_choch"].any())
+    return bool(win["bear_choch"].any())
+
+
+def get_recent_h1_choch_time(df_h1_local: pd.DataFrame, h4_timestamp: pd.Timestamp, side: str, lookback_hours: int = 16) -> pd.Timestamp | pd.NaT:
+    start_ts = h4_timestamp - pd.Timedelta(hours=lookback_hours)
+    end_ts = h4_timestamp
+
+    win = df_h1_local[
+        (df_h1_local["timestamp"] > start_ts) &
+        (df_h1_local["timestamp"] <= end_ts)
+    ].copy()
+
+    if len(win) == 0:
+        return pd.NaT
+
+    if side == "long":
+        hits = win[win["bull_choch"]].copy()
+    else:
+        hits = win[win["bear_choch"]].copy()
+
+    if len(hits) == 0:
+        return pd.NaT
+
+    return hits["timestamp"].max()
+
+
+def is_fresh_zone(df_local: pd.DataFrame, idx: int, zone_low: float, zone_high: float) -> bool:
+    touch_count = 0
+    end_idx = min(idx + 3, len(df_local) - 1)
+    for t in range(idx + 1, end_idx + 1):
+        touched = (df_local.loc[t, "high"] >= zone_low) and (df_local.loc[t, "low"] <= zone_high)
+        if touched:
+            touch_count += 1
+    return touch_count <= 1
+
+
+def overlap_size(a_low: float, a_high: float, b_low: float, b_high: float) -> float:
+    return max(0.0, min(a_high, b_high) - max(a_low, b_low))
+
+
+def is_zone_fresh_at_entry(df_local: pd.DataFrame, zone_created_idx: int, entry_idx: int, zone_low: float, zone_high: float) -> bool:
+    """
+    [BACKTEST v1.2] Zone 생성 이후 ~ 진입 직전까지 zone 이 2번 이상 터치되지 않았으면 fresh.
+    """
+    start = zone_created_idx + 1
+    end = entry_idx - 1
+    if start < 0:
+        start = 0
+    if end >= len(df_local):
+        end = len(df_local) - 1
+    if start > end:
+        return True
+
+    touch_count = 0
+    for t in range(start, end + 1):
+        touched = (df_local.loc[t, "high"] >= zone_low) and (df_local.loc[t, "low"] <= zone_high)
+        if touched:
+            touch_count += 1
+    return touch_count <= 1
+
+
+def evaluate_freshness_at_entry(df_local: pd.DataFrame, structure: Dict[str, Any], entry_idx: int) -> Tuple[float, List[str]]:
+    """
+    [BACKTEST v1.2] 진입 시점에 zone freshness 를 재평가해서 bonus 점수 반환.
+    OB fresh → +1.0, FVG fresh → +0.5.
+    """
+    side = structure["type"]
+    side_tag = "bull" if side == "long" else "bear"
+
+    bonus = 0.0
+    fresh_reasons: List[str] = []
+
+    if structure.get("has_ob"):
+        if is_zone_fresh_at_entry(
+            df_local,
+            structure["zone_created_idx"],
+            entry_idx,
+            structure["ob_low"],
+            structure["ob_high"],
+        ):
+            bonus += 1.0
+            fresh_reasons.append(f"fresh_{side_tag}_ob")
+
+    if structure.get("has_fvg"):
+        if is_zone_fresh_at_entry(
+            df_local,
+            structure["zone_created_idx"],
+            entry_idx,
+            structure["fvg_low"],
+            structure["fvg_high"],
+        ):
+            bonus += 0.5
+            fresh_reasons.append(f"fresh_{side_tag}_fvg")
+
+    return bonus, fresh_reasons
+
+
+def passes_volume_filter(df: pd.DataFrame, zone_created_idx: int) -> Tuple[bool, str]:
+    """
+    [BACKTEST v1.2] Zone 생성 bar 의 volume 이 이전 avg 대비 spike 인지 확인.
+    VOLUME_STRICT_MODE = True 일 때는 직전봉 대비도 추가 체크.
+    """
+    if not USE_VOLUME_FILTER:
+        return True, "vol_off"
+
+    if "volume" not in df.columns:
+        return True, "vol_no_data"
+
+    start = max(0, zone_created_idx - VOLUME_AVG_WINDOW)
+    end = zone_created_idx
+    if end <= start:
+        return True, "vol_window_empty"
+
+    try:
+        avg_vol = df.loc[start:end - 1, "volume"].mean()
+        zone_vol = df.loc[zone_created_idx, "volume"]
+    except Exception:
+        return True, "vol_index_err"
+
+    if pd.isna(avg_vol) or avg_vol <= 0:
+        return True, "vol_no_avg"
+    if pd.isna(zone_vol) or zone_vol <= 0:
+        return True, "vol_zone_invalid"
+
+    ratio_avg = zone_vol / avg_vol
+    if ratio_avg < VOLUME_SPIKE_MULT:
+        return False, f"vol_low({ratio_avg:.2f})"
+
+    if VOLUME_STRICT_MODE and zone_created_idx >= 1:
+        prev_vol = df.loc[zone_created_idx - 1, "volume"]
+        if pd.notna(prev_vol) and prev_vol > 0:
+            ratio_prev = zone_vol / prev_vol
+            if ratio_prev < VOLUME_PREV_MULT:
+                return False, f"vol_prev_low({ratio_prev:.2f})"
+
+    return True, f"vol_spike({ratio_avg:.2f})"
+
+
+def build_structures(df: pd.DataFrame) -> Tuple[pd.DataFrame, List[Dict[str, Any]], Dict[int, List[Dict[str, Any]]]]:
+    recent_sweep_n = 10
+    df = df.copy()
+
+    df["pivot_sweep_high"] = False
+    df["pivot_sweep_low"] = False
+    df["recent_sweep_high"] = False
+    df["recent_sweep_low"] = False
+
+    for i in range(recent_sweep_n, len(df)):
+        lph = df.loc[i, "last_pivot_high"]
+        lpl = df.loc[i, "last_pivot_low"]
+
+        recent_high = df["high"].iloc[i - recent_sweep_n:i].max()
+        recent_low = df["low"].iloc[i - recent_sweep_n:i].min()
+
+        if pd.notna(lph):
+            if df.loc[i, "high"] > lph and df.loc[i, "close"] < lph:
+                df.loc[i, "pivot_sweep_high"] = True
+
+        if pd.notna(lpl):
+            if df.loc[i, "low"] < lpl and df.loc[i, "close"] > lpl:
+                df.loc[i, "pivot_sweep_low"] = True
+
+        if df.loc[i, "high"] > recent_high and df.loc[i, "close"] < recent_high:
+            df.loc[i, "recent_sweep_high"] = True
+
+        if df.loc[i, "low"] < recent_low and df.loc[i, "close"] > recent_low:
+            df.loc[i, "recent_sweep_low"] = True
+
+    structure_wait = 10
+    post_structure_zone_window = 6
+    zone_max_age = 30
+    structures: List[Dict[str, Any]] = []
+
+    for i in range(60, len(df) - 1):
+        short_sweep = bool(df.loc[i, "pivot_sweep_high"] or df.loc[i, "recent_sweep_high"])
+        if short_sweep:
+            for j in range(i + 1, min(i + structure_wait + 1, len(df))):
+                if not (df.loc[j, "bear_disp"] or df.loc[j, "bear_mss"]):
+                    continue
+
+                base_score = 2.5
+                reasons = ["sweep"]
+
+                if df.loc[i, "pd_loc"] == "premium":
+                    base_score += 1.0
+                    reasons.append("premium")
+                if df.loc[j, "bear_disp"]:
+                    base_score += 3.0
+                    reasons.append("bear_disp")
+                if df.loc[j, "bear_mss"]:
+                    base_score += 3.0
+                    reasons.append("bear_mss")
+                if df.loc[j, "trend"] == "down":
+                    base_score += 1.5
+                    reasons.append("trend_down")
+
+                structure_idx = j
+                found_zone = False
+
+                for k in range(structure_idx + 1, min(structure_idx + post_structure_zone_window + 1, len(df))):
+                    score_k = base_score
+                    reasons_k = reasons.copy()
+
+                    has_ob = pd.notna(df.loc[k, "bear_ob_low"]) and pd.notna(df.loc[k, "bear_ob_high"])
+                    has_fvg = pd.notna(df.loc[k, "bear_fvg_low"]) and pd.notna(df.loc[k, "bear_fvg_high"])
+
+                    if not (has_ob or has_fvg):
+                        continue
+
+                    ob_low = ob_high = None
+                    fvg_low = fvg_high = None
+
+                    if has_ob:
+                        ob_low = float(df.loc[k, "bear_ob_low"])
+                        ob_high = float(df.loc[k, "bear_ob_high"])
+                        ob_size = float(df.loc[k, "bear_ob_size"]) if pd.notna(df.loc[k, "bear_ob_size"]) else 0.0
+                        atr_val = float(df.loc[k, "atr"]) if pd.notna(df.loc[k, "atr"]) else np.nan
+
+                        score_k += 1.5
+                        reasons_k.append("valid_bear_ob")
+
+                        if is_fresh_zone(df, k, ob_low, ob_high):
+                            score_k += 1.0
+                            reasons_k.append("fresh_bear_ob")
+
+                        if pd.notna(df.loc[k, "disp_strength"]) and df.loc[k, "disp_strength"] >= 1.2:
+                            score_k += 1.0
+                            reasons_k.append("strong_disp_ob")
+
+                        if pd.notna(atr_val) and atr_val > 0 and ob_size / atr_val >= 0.20:
+                            score_k += 0.5
+                            reasons_k.append("sized_bear_ob")
+
+                    if has_fvg:
+                        fvg_low = float(df.loc[k, "bear_fvg_low"])
+                        fvg_high = float(df.loc[k, "bear_fvg_high"])
+                        fvg_size = float(df.loc[k, "bear_fvg_size"]) if pd.notna(df.loc[k, "bear_fvg_size"]) else 0.0
+                        atr_val = float(df.loc[k, "atr"]) if pd.notna(df.loc[k, "atr"]) else np.nan
+
+                        score_k += 1.0
+                        reasons_k.append("valid_bear_fvg")
+
+                        if pd.notna(atr_val) and atr_val > 0 and fvg_size / atr_val >= 0.15:
+                            score_k += 0.5
+                            reasons_k.append("sized_bear_fvg")
+
+                        if (k - structure_idx) <= 2:
+                            score_k += 0.75
+                            reasons_k.append("early_bear_fvg")
+
+                        if is_fresh_zone(df, k, fvg_low, fvg_high):
+                            score_k += 0.5
+                            reasons_k.append("fresh_bear_fvg")
+
+                    if has_ob and has_fvg:
+                        ov = overlap_size(ob_low, ob_high, fvg_low, fvg_high)
+                        if ov > 0:
+                            score_k += 1.5
+                            reasons_k.append("bear_ob_fvg_overlap")
+                        zone_low = min(ob_low, fvg_low)
+                        zone_high = max(ob_high, fvg_high)
+                    elif has_ob:
+                        zone_low = ob_low
+                        zone_high = ob_high
+                    else:
+                        zone_low = fvg_low
+                        zone_high = fvg_high
+
+                    if zone_low < zone_high:
+                        structures.append({
+                            "type": "short",
+                            "sweep_idx": i,
+                            "structure_idx": structure_idx,
+                            "zone_created_idx": k,
+                            "zone_low": float(zone_low),
+                            "zone_high": float(zone_high),
+                            "sweep_ref": float(df.loc[i, "high"]),
+                            "expire_idx": min(k + zone_max_age, len(df) - 1),
+                            "used": False,
+                            "score": float(score_k),
+                            "reasons": ",".join(reasons_k),
+                            "has_ob": bool(has_ob),
+                            "has_fvg": bool(has_fvg),
+                            "ob_low": float(ob_low) if has_ob else None,
+                            "ob_high": float(ob_high) if has_ob else None,
+                            "fvg_low": float(fvg_low) if has_fvg else None,
+                            "fvg_high": float(fvg_high) if has_fvg else None,
+                        })
+                        found_zone = True
+                        break
+
+                if found_zone:
+                    break
+
+        long_sweep = bool(df.loc[i, "pivot_sweep_low"] or df.loc[i, "recent_sweep_low"])
+        if long_sweep:
+            for j in range(i + 1, min(i + structure_wait + 1, len(df))):
+                if not (df.loc[j, "bull_disp"] or df.loc[j, "bull_mss"]):
+                    continue
+
+                base_score = 2.5
+                reasons = ["sweep"]
+
+                if df.loc[i, "pd_loc"] == "discount":
+                    base_score += 1.0
+                    reasons.append("discount")
+                if df.loc[j, "bull_disp"]:
+                    base_score += 3.0
+                    reasons.append("bull_disp")
+                if df.loc[j, "bull_mss"]:
+                    base_score += 3.0
+                    reasons.append("bull_mss")
+                if df.loc[j, "trend"] == "up":
+                    base_score += 1.5
+                    reasons.append("trend_up")
+
+                structure_idx = j
+                found_zone = False
+
+                for k in range(structure_idx + 1, min(structure_idx + post_structure_zone_window + 1, len(df))):
+                    score_k = base_score
+                    reasons_k = reasons.copy()
+
+                    has_ob = pd.notna(df.loc[k, "bull_ob_low"]) and pd.notna(df.loc[k, "bull_ob_high"])
+                    has_fvg = pd.notna(df.loc[k, "bull_fvg_low"]) and pd.notna(df.loc[k, "bull_fvg_high"])
+
+                    if not (has_ob or has_fvg):
+                        continue
+
+                    ob_low = ob_high = None
+                    fvg_low = fvg_high = None
+
+                    if has_ob:
+                        ob_low = float(df.loc[k, "bull_ob_low"])
+                        ob_high = float(df.loc[k, "bull_ob_high"])
+                        ob_size = float(df.loc[k, "bull_ob_size"]) if pd.notna(df.loc[k, "bull_ob_size"]) else 0.0
+                        atr_val = float(df.loc[k, "atr"]) if pd.notna(df.loc[k, "atr"]) else np.nan
+
+                        score_k += 1.5
+                        reasons_k.append("valid_bull_ob")
+
+                        if is_fresh_zone(df, k, ob_low, ob_high):
+                            score_k += 1.0
+                            reasons_k.append("fresh_bull_ob")
+
+                        if pd.notna(df.loc[k, "disp_strength"]) and df.loc[k, "disp_strength"] >= 1.2:
+                            score_k += 1.0
+                            reasons_k.append("strong_disp_ob")
+
+                        if pd.notna(atr_val) and atr_val > 0 and ob_size / atr_val >= 0.20:
+                            score_k += 0.5
+                            reasons_k.append("sized_bull_ob")
+
+                    if has_fvg:
+                        fvg_low = float(df.loc[k, "bull_fvg_low"])
+                        fvg_high = float(df.loc[k, "bull_fvg_high"])
+                        fvg_size = float(df.loc[k, "bull_fvg_size"]) if pd.notna(df.loc[k, "bull_fvg_size"]) else 0.0
+                        atr_val = float(df.loc[k, "atr"]) if pd.notna(df.loc[k, "atr"]) else np.nan
+
+                        score_k += 1.0
+                        reasons_k.append("valid_bull_fvg")
+
+                        if pd.notna(atr_val) and atr_val > 0 and fvg_size / atr_val >= 0.15:
+                            score_k += 0.5
+                            reasons_k.append("sized_bull_fvg")
+
+                        if (k - structure_idx) <= 2:
+                            score_k += 0.75
+                            reasons_k.append("early_bull_fvg")
+
+                        if is_fresh_zone(df, k, fvg_low, fvg_high):
+                            score_k += 0.5
+                            reasons_k.append("fresh_bull_fvg")
+
+                    if has_ob and has_fvg:
+                        ov = overlap_size(ob_low, ob_high, fvg_low, fvg_high)
+                        if ov > 0:
+                            score_k += 1.5
+                            reasons_k.append("bull_ob_fvg_overlap")
+                        zone_low = min(ob_low, fvg_low)
+                        zone_high = max(ob_high, fvg_high)
+                    elif has_ob:
+                        zone_low = ob_low
+                        zone_high = ob_high
+                    else:
+                        zone_low = fvg_low
+                        zone_high = fvg_high
+
+                    if zone_low < zone_high:
+                        structures.append({
+                            "type": "long",
+                            "sweep_idx": i,
+                            "structure_idx": structure_idx,
+                            "zone_created_idx": k,
+                            "zone_low": float(zone_low),
+                            "zone_high": float(zone_high),
+                            "sweep_ref": float(df.loc[i, "low"]),
+                            "expire_idx": min(k + zone_max_age, len(df) - 1),
+                            "used": False,
+                            "score": float(score_k),
+                            "reasons": ",".join(reasons_k),
+                            "has_ob": bool(has_ob),
+                            "has_fvg": bool(has_fvg),
+                            "ob_low": float(ob_low) if has_ob else None,
+                            "ob_high": float(ob_high) if has_ob else None,
+                            "fvg_low": float(fvg_low) if has_fvg else None,
+                            "fvg_high": float(fvg_high) if has_fvg else None,
+                        })
+                        found_zone = True
+                        break
+
+                if found_zone:
+                    break
+
+    structures_by_zone_created: Dict[int, List[Dict[str, Any]]] = {}
+    for s in structures:
+        structures_by_zone_created.setdefault(s["zone_created_idx"], []).append(s)
+
+    return df, structures, structures_by_zone_created
+
+
+def calc_min_stop_distance(entry: float, atr_val: float) -> float:
+    pct_floor = entry * 0.003
+    atr_floor = atr_val * 0.25 if pd.notna(atr_val) and atr_val > 0 else 0.0
+    return max(pct_floor, atr_floor)
+
+
+def clamp_stop_for_long(entry: float, raw_sl: float, atr_val: float) -> float:
+    min_dist = calc_min_stop_distance(entry, atr_val)
+    max_sl = entry - min_dist
+    return min(raw_sl, max_sl)
+
+
+def clamp_stop_for_short(entry: float, raw_sl: float, atr_val: float) -> float:
+    min_dist = calc_min_stop_distance(entry, atr_val)
+    min_sl = entry + min_dist
+    return max(raw_sl, min_sl)
+
+
+def calc_position_size(balance: float, risk_pct: float, entry: float, sl: float, fee_rate: float, max_notional_mult: float = 3.0) -> Tuple[Optional[float], Optional[float], Optional[float]]:
+    risk_amount = balance * risk_pct
+    risk_per_unit = abs(entry - sl)
+    if risk_per_unit <= 0:
+        return None, None, None
+
+    qty = risk_amount / risk_per_unit
+    notional = abs(entry * qty)
+
+    max_notional = balance * max_notional_mult
+    if notional > max_notional:
+        qty = max_notional / abs(entry)
+        notional = abs(entry * qty)
+
+    est_roundtrip_fee = notional * fee_rate * 2
+    if est_roundtrip_fee > risk_amount * 0.35:
+        return None, None, None
+
+    return qty, risk_per_unit, notional
+
+
+def parse_reason_set(reason_str: str) -> Set[str]:
+    if pd.isna(reason_str) or str(reason_str).strip() == "":
+        return set()
+    return {x.strip() for x in str(reason_str).split(",") if x.strip()}
+
+
+def get_run_potential(df_local: pd.DataFrame, i: int, structure: Dict[str, Any]) -> Tuple[int, str]:
+    side = structure["type"]
+    reasons = parse_reason_set(structure["reasons"])
+
+    rscore = 0
+    tags: List[str] = []
+
+    if side == "long" and df_local.loc[i, "trend"] == "up":
+        rscore += 1
+        tags.append("trend_align")
+    if side == "short" and df_local.loc[i, "trend"] == "down":
+        rscore += 1
+        tags.append("trend_align")
+
+    if "bull_mss" in reasons or "bear_mss" in reasons:
+        rscore += 1
+        tags.append("mss")
+
+    if "valid_bull_fvg" in reasons or "valid_bear_fvg" in reasons:
+        rscore += 1
+        tags.append("fvg")
+
+    if "bull_ob_fvg_overlap" in reasons or "bear_ob_fvg_overlap" in reasons:
+        rscore += 1
+        tags.append("overlap")
+
+    if side == "long":
+        entry_proxy = structure["zone_low"] + (structure["zone_high"] - structure["zone_low"]) * 0.40
+        raw_sl = structure["sweep_ref"] - (df_local.loc[i, "atr"] if pd.notna(df_local.loc[i, "atr"]) else 0.0) * 0.08
+        sl_proxy = clamp_stop_for_long(entry_proxy, raw_sl, df_local.loc[i, "atr"])
+        if sl_proxy < entry_proxy:
+            risk = entry_proxy - sl_proxy
+            room = (df_local.loc[i, "pd_high"] - entry_proxy) if pd.notna(df_local.loc[i, "pd_high"]) else 0.0
+            if risk > 0 and pd.notna(room) and room >= risk * 2.8:
+                rscore += 1
+                tags.append("room")
+    else:
+        entry_proxy = structure["zone_low"] + (structure["zone_high"] - structure["zone_low"]) * 0.60
+        raw_sl = structure["sweep_ref"] + (df_local.loc[i, "atr"] if pd.notna(df_local.loc[i, "atr"]) else 0.0) * 0.08
+        sl_proxy = clamp_stop_for_short(entry_proxy, raw_sl, df_local.loc[i, "atr"])
+        if sl_proxy > entry_proxy:
+            risk = sl_proxy - entry_proxy
+            room = (entry_proxy - df_local.loc[i, "pd_low"]) if pd.notna(df_local.loc[i, "pd_low"]) else 0.0
+            if risk > 0 and pd.notna(room) and room >= risk * 2.8:
+                rscore += 1
+                tags.append("room")
+
+    return rscore, ",".join(tags)
+
+
+# =========================================================
+# v1.9_REALISTIC: Zone 일괄 평가 (tier 미리 계산)
+# =========================================================
+def evaluate_zones_at_current_time(
+    df_h4: pd.DataFrame,
+    df_h1: pd.DataFrame,
+    active_structures: List[Dict[str, Any]],
+    i: int,
+    exclude_recent_h1: int = 0,
+    symbol: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """
+    현재 H4 index 기준으로 active zone 들을 일괄 평가 (Stage 4K).
+    
+    백테스트 4K BOOST15 와 동일 logic:
+      1) atomic 12 컨디션 계산 (compute_trade_tags)
+      2) Tier 분류 (classify_tier_stage4h)
+      3) Tier × side × symbol → risk_mult (4I 차단 포함)
+      4) RP boost (RP_MULT_4H, RP0 → 1.5×)
+      5) Stage 4J extra mult (1.5×/1.2× booster matrix)
+      6) 4J outlier 차단 (GEM_LONG_RP1, ROOM_ONLY_AVAX)
+    
+    Sentiment mult 는 진입 시점 (generate_entry_signal) 에서 별도 계산.
+    
+    반환: list of dicts (zone + 평가 결과)
+    """
+    if i < 0 or i >= len(df_h4):
+        return []
+
+    evaluated: List[Dict[str, Any]] = []
+
+    for s in active_structures:
+        # Freshness 재평가
+        fresh_bonus, fresh_reasons = evaluate_freshness_at_entry(df_h4, s, i)
+        eff_score = float(s["score"]) + fresh_bonus
+        if eff_score < MIN_SCORE:
+            continue
+
+        side_zone = str(s["type"])  # "long" or "short"
+        zone_low = float(s["zone_low"])
+        zone_high = float(s["zone_high"])
+        zone_created_idx = int(s["zone_created_idx"])
+        structure_reasons = str(s.get("reasons", ""))
+
+        # Tier 입력값 계산 (exclude_recent_h1 적용)
+        pre_sweep, pre_fvg, pre_ob, pre_total = compute_pre_entry_confluence(
+            df_h4=df_h4,
+            df_h1=df_h1,
+            h4_entry_idx=i,
+            zone_low=zone_low,
+            zone_high=zone_high,
+            lookback_ltf_bars=PRE_ENTRY_LOOKBACK_LTF_BARS,
+            exclude_recent_h1=exclude_recent_h1,
+        )
+        wick_r5 = compute_wick_ratio_5(
+            df_h4=df_h4,
+            df_h1=df_h1,
+            h4_entry_idx=i,
+            side=side_zone,
+            lookback_n=WICK_LOOKBACK_BARS,
+            exclude_recent_h1=exclude_recent_h1,
+        )
+
+        # ATR (atomic a_room 계산용)
+        atr_val = df_h4.loc[i, "atr"] if "atr" in df_h4.columns and pd.notna(df_h4.loc[i, "atr"]) else 0.0
+
+        # ⭐ Stage 4K: atomic 12 컨디션 계산 ⭐
+        atoms_dict = compute_trade_tags(
+            df_struct=df_h4,
+            entry_idx=i,
+            zone_created_idx=zone_created_idx,
+            zone_low=zone_low,
+            zone_high=zone_high,
+            side=side_zone,
+            pre_total=int(pre_total),
+            sweep_count=int(pre_sweep),
+            score=float(eff_score),
+            wick_ratio_5=float(wick_r5) if wick_r5 is not None else np.nan,
+            structure_reasons=structure_reasons,
+            atr_val=float(atr_val),
+        )
+
+        # ⭐ Stage 4H: Tier 분류 (ALPHA/SWEEP/COMPLETE_OUT/SKIP_MSS) ⭐
+        tier_label = classify_tier_stage4h(atoms_dict, side=side_zone)
+
+        # ⭐ Stage 4I 차단 + scenario 적용 ⭐
+        tier_mult_raw = get_tier_risk_mult_4h(tier_label, side=side_zone, symbol=symbol)
+
+        # Run Potential
+        rp, rp_tags = get_run_potential(df_h4, i, s)
+
+        # ⭐ Stage 4J 차단 (outlier 도박 그룹) ⭐
+        stage4j_block = is_stage4j_blocked(tier_label, side_zone, symbol or "", rp)
+        if stage4j_block is not None:
+            tier_mult_raw = 0.0  # 차단으로 강제
+
+        # RP Boost 필터 (RP_MULT_4H 사용)
+        rp_action, tier_mult_after_rp = apply_rp_filter(tier_mult_raw, rp)
+
+        # ⭐ Stage 4J extra mult layer (1.5×/1.2× booster) ⭐
+        stage4j_mult, stage4j_label = get_stage4j_extra_mult(
+            tier_label, side_zone, symbol or "", rp
+        )
+
+        # 최종 tier_mult_final
+        tier_mult_final = float(tier_mult_after_rp) * float(stage4j_mult)
+
+        # Notional cap (TIER_CAP_4H 기반)
+        effective_cap = resolve_notional_cap(tier_label)
+
+        evaluated.append({
+            **s,  # 원본 zone 정보
+            "eff_score": float(eff_score),
+            "fresh_reasons": fresh_reasons,
+            "tier_pre_sweep": int(pre_sweep),
+            "tier_pre_fvg": int(pre_fvg),
+            "tier_pre_ob": int(pre_ob),
+            "tier_pre_total": int(pre_total),
+            "wick_ratio_5": float(wick_r5) if wick_r5 is not None else np.nan,
+            "atoms_dict": atoms_dict,
+            "tier": tier_label,
+            "tier_mult_raw": float(tier_mult_raw),
+            "run_potential": int(rp),
+            "run_tags": rp_tags,
+            "rp_action": str(rp_action),
+            "stage4j_block": stage4j_block,        # 차단 사유 (None 이면 통과)
+            "stage4j_mult": float(stage4j_mult),
+            "stage4j_label": stage4j_label,
+            "tier_mult_final": float(tier_mult_final),
+            "effective_notional_cap": float(effective_cap),
+            "tier_passable": tier_mult_final > 0.0,
+        })
+
+    return evaluated
+
+
+def classify_grade(entry_score: float, run_potential: int) -> str:
+    if run_potential >= 3 and entry_score >= 10.0:
+        return "S"
+    if run_potential == 2 and entry_score >= 10.0:
+        return "A"
+    return "B"
+
+
+def get_expansion_state(market_state: str, h1_choch_confirm: bool) -> bool:
+    return bool(h1_choch_confirm and market_state in ["up", "down"])
+
+
+def get_tp_plan(expansion_state: bool = False) -> Dict[str, Any]:
+    if expansion_state:
+        return {
+            "name": "expansion",
+            "targets": [(1.0, 0.15), (2.0, 0.15), (3.0, 0.10)],
+            "runner_frac": 0.60,
+            "trail_activate_rr": 4.0,
+            "be_after_rr": 1.5,
+            "max_hold_bars": 20,
+        }
+    return {
+        "name": "base",
+        "targets": [(1.0, 0.25), (2.0, 0.20), (3.0, 0.15)],
+        "runner_frac": 0.40,
+        "trail_activate_rr": 3.0,
+        "be_after_rr": 1.0,
+        "max_hold_bars": 12,
+    }
+
+
+def get_h1_window(df_h1_local: pd.DataFrame, h4_timestamp: pd.Timestamp, lookback_hours: int = 12) -> pd.DataFrame:
+    start_ts = h4_timestamp - pd.Timedelta(hours=lookback_hours)
+    end_ts = h4_timestamp
+    return df_h1_local[(df_h1_local["timestamp"] > start_ts) & (df_h1_local["timestamp"] <= end_ts)].copy()
+
+
+def refine_entry_with_h1_fvg(
+    df_h1_local: pd.DataFrame,
+    h4_timestamp: pd.Timestamp,
+    side: str,
+    zone_low: float,
+    zone_high: float,
+    base_entry: float,
+    lookback_hours: int = 12,
+    max_improve_frac: float = 0.25,
+) -> Tuple[float, bool, float, str]:
+    zone_size = zone_high - zone_low
+    if zone_size <= 0:
+        return base_entry, False, np.nan, ""
+
+    max_improve = zone_size * max_improve_frac
+    win = get_h1_window(df_h1_local, h4_timestamp, lookback_hours=lookback_hours)
+
+    if len(win) == 0:
+        return base_entry, False, np.nan, ""
+
+    if side == "long":
+        candidates = []
+        for _, r in win.iterrows():
+            if pd.notna(r["bull_fvg_low"]) and pd.notna(r["bull_fvg_high"]):
+                mid = (float(r["bull_fvg_low"]) + float(r["bull_fvg_high"])) / 2.0
+                if zone_low <= mid <= zone_high and mid < base_entry:
+                    candidates.append({"ts": r["timestamp"], "mid": mid, "tag": "h1_bull_fvg_mid"})
+
+        if not candidates:
+            return base_entry, False, np.nan, ""
+
+        candidates = sorted(candidates, key=lambda x: abs(base_entry - x["mid"]))
+        candidate = candidates[0]["mid"]
+        candidate = max(candidate, base_entry - max_improve)
+        candidate = max(candidate, zone_low)
+        candidate = min(candidate, base_entry)
+
+        improved = candidate < base_entry - 1e-12
+        return candidate, improved, candidate, candidates[0]["tag"]
+
+    candidates = []
+    for _, r in win.iterrows():
+        if pd.notna(r["bear_fvg_low"]) and pd.notna(r["bear_fvg_high"]):
+            mid = (float(r["bear_fvg_low"]) + float(r["bear_fvg_high"])) / 2.0
+            if zone_low <= mid <= zone_high and mid > base_entry:
+                candidates.append({"ts": r["timestamp"], "mid": mid, "tag": "h1_bear_fvg_mid"})
+
+    if not candidates:
+        return base_entry, False, np.nan, ""
+
+    candidates = sorted(candidates, key=lambda x: abs(base_entry - x["mid"]))
+    candidate = candidates[0]["mid"]
+    candidate = min(candidate, base_entry + max_improve)
+    candidate = min(candidate, zone_high)
+    candidate = max(candidate, base_entry)
+
+    improved = candidate > base_entry + 1e-12
+    return candidate, improved, candidate, candidates[0]["tag"]
+
+
+def get_latest_balance_usdt(wallet_response: Dict[str, Any]) -> float:
+    try:
+        accounts = wallet_response.get("result", {}).get("list", [])
+        for account in accounts:
+            coins = account.get("coin", [])
+            for coin in coins:
+                if coin.get("coin") == "USDT":
+                    val = coin.get("walletBalance") or coin.get("equity") or "0"
+                    return float(val)
+    except Exception:
+        return 0.0
+    return 0.0
+
+
+def generate_entry_signal(
+    df_h4_raw: pd.DataFrame,
+    df_h1_raw: pd.DataFrame,
+    balance: float,
+    risk_pct: float,
+    fee_rate: float,
+    max_notional_mult: float,
+    current_price: Optional[float] = None,
+    last_exit_time_iso: Optional[str] = None,
+    last_exit_side: Optional[str] = None,
+    risk_multiplier: float = 1.0,
+    df_1m_raw: Optional[pd.DataFrame] = None,
+    symbol: Optional[str] = None,
+) -> Dict[str, Any]:
+    if len(df_h4_raw) < 250 or len(df_h1_raw) < 400:
+        return {
+            "should_enter": False,
+            "reason": "not_enough_data",
+            "h4_rows": len(df_h4_raw),
+            "h1_rows": len(df_h1_raw),
+        }
+
+    # ⭐ v1.9_BASELINE: Global Risk Multiplier (패널 runtime 조절)
+    # base risk_pct 에 multiplier 곱해서 이후 모든 계산에 반영.
+    # 실전 패널에서 0.5 ~ 3.0 범위로 조절 가능.
+    try:
+        _rm = float(risk_multiplier) if risk_multiplier is not None else 1.0
+    except Exception:
+        _rm = 1.0
+    if _rm <= 0.0:
+        _rm = 1.0
+    risk_pct = float(risk_pct) * _rm
+    # 주의: max_notional_mult 인자는 이제 fallback 용. 실제로는 tier 별로
+    # resolve_notional_cap() 결과가 사용됨.
+
+    df_h4 = prepare_h4_dataframe(df_h4_raw.copy())
+    df_h1 = prepare_h1_dataframe(df_h1_raw.copy())
+
+    # ⭐ Stage 3 Wave-aware: H4 trend ← H1 CHoCH state
+    df_h4 = apply_h1_choch_trend(df_h4, df_h1)
+    # 이제 base_trend 가 H1 CHoCH 기반이므로 market_state 도 같은 기반으로 계산됨
+    df_h4 = apply_h4_market_state(df_h4, transition_bars=360)
+
+    df_struct, structures, _ = build_structures(df_h4.copy())
+
+    if len(df_struct) < 220:
+        return {
+            "should_enter": False,
+            "reason": "not_enough_processed_h4_data",
+        }
+
+    # ⭐ Stage 3 Wave-aware: D1 wave_state (Multi-fractal context)
+    try:
+        df_d1 = build_d1_trend(df_struct)
+    except Exception:
+        df_d1 = pd.DataFrame()
+
+    i = len(df_struct) - 2
+    row = df_struct.iloc[i]
+
+    # [BACKTEST v1.2] Same-side cooldown 체크
+    # 스탑 직후 같은 방향으로 재진입하는 것 금지
+    same_side_block = None
+    if last_exit_time_iso and last_exit_side:
+        try:
+            last_exit_dt = datetime.fromisoformat(last_exit_time_iso.replace("Z", "+00:00"))
+            if last_exit_dt.tzinfo is None:
+                last_exit_dt = last_exit_dt.replace(tzinfo=timezone.utc)
+            now_utc = datetime.now(timezone.utc)
+            elapsed_hours = (now_utc - last_exit_dt).total_seconds() / 3600.0
+            if elapsed_hours < SAME_SIDE_COOLDOWN_HOURS:
+                # "Buy"/"Sell" → "long"/"short" 변환
+                _side_map = {"Buy": "long", "Sell": "short"}
+                blocked_side = _side_map.get(last_exit_side, str(last_exit_side).lower())
+                same_side_block = blocked_side
+        except Exception:
+            pass
+
+    # [BACKTEST v1.2] RELAX_MIN_SCORE 로 후보 필터 (관대)
+    # 이후 fresh_bonus 추가해서 eff_score >= MIN_SCORE 인 것만 진입
+    active_structures = [
+        s for s in structures
+        if s["zone_created_idx"] <= i <= s["expire_idx"] and s["score"] >= RELAX_MIN_SCORE
+    ]
+
+    # ⭐ Stage 4K: zone 일괄 평가 (atomic 12 + tier + 4I/4J 차단/booster 적용) ⭐
+    evaluated_zones = evaluate_zones_at_current_time(
+        df_h4=df_struct,
+        df_h1=df_h1,
+        active_structures=active_structures,
+        i=i,
+        exclude_recent_h1=EXCLUDE_RECENT_H1_FOR_TIER,
+        symbol=symbol,
+    )
+
+    # ⭐ v1.9_REALISTIC: 정렬 키 선택 (tier 우선 or score 우선)
+    if USE_TIER_PRIORITY_SORT:
+        # tier 우선: tier_mult_final 내림차순 > eff_score 내림차순 > zone_created_idx 오름차순
+        evaluated_zones.sort(key=lambda z: (
+            -float(z["tier_mult_final"]),
+            -float(z["eff_score"]),
+            int(z["zone_created_idx"]),
+        ))
+    else:
+        # 기존 방식: eff_score 내림차순 > zone_created_idx 오름차순
+        evaluated_zones.sort(key=lambda z: (
+            -float(z["eff_score"]),
+            int(z["zone_created_idx"]),
+        ))
+
+    for z in evaluated_zones:
+        # tier 가 D 또는 RP skip 이면 즉시 스킵
+        if not z["tier_passable"]:
+            continue
+
+        # 기존 s 참조를 z 로 사용 (dict 이므로 zone_low 등 접근 동일)
+        s = z
+        eff_score = z["eff_score"]
+        fresh_reasons = z["fresh_reasons"]
+
+        # [BACKTEST v1.2] Same-side cooldown: 방금 스탑 난 방향 skip
+        if same_side_block is not None and s["type"] == same_side_block:
+            continue
+
+        # 실시간 모드: 현재가가 zone 안에 있는지 체크
+        # v2.0 WICK: 1분봉 high/low 로 wick-only touch 도 감지
+        if current_price is not None:
+            touched_now = (s["zone_low"] <= current_price <= s["zone_high"])
+            touched_wick = False
+            # current_price 가 zone 밖이면 1분봉 wick touch 확인
+            if (not touched_now) and USE_1M_WICK_TOUCH and df_1m_raw is not None and len(df_1m_raw) > 0:
+                try:
+                    lookback_n = int(WICK_TOUCH_LOOKBACK_BARS)
+                    recent_1m = df_1m_raw.tail(lookback_n)
+                    recent_high = float(recent_1m["high"].max())
+                    recent_low = float(recent_1m["low"].min())
+                    wick_touched = (recent_high >= s["zone_low"]) and (recent_low <= s["zone_high"])
+                    if wick_touched:
+                        # 이탈 거리 체크: 현재가가 zone 에서 너무 멀리 가면 skip
+                        zone_size = s["zone_high"] - s["zone_low"]
+                        if zone_size > 0:
+                            if s["type"] == "long":
+                                # LONG zone 이면 current_price > zone_high 일 때 이탈
+                                exit_distance = max(0.0, current_price - s["zone_high"])
+                            else:
+                                # SHORT zone 이면 current_price < zone_low 일 때 이탈
+                                exit_distance = max(0.0, s["zone_low"] - current_price)
+                            exit_frac = exit_distance / zone_size
+                            if exit_frac <= WICK_TOUCH_MAX_EXIT_FRAC:
+                                touched_wick = True
+                            # else: 너무 늦음, skip
+                except Exception:
+                    touched_wick = False
+            touched = touched_now or touched_wick
+        else:
+            touched = (row["high"] >= s["zone_low"]) and (row["low"] <= s["zone_high"])
+        if not touched:
+            continue
+
+        # [BACKTEST v1.2] Volume filter (zone 형성 bar 의 volume spike 확인)
+        vol_ok, vol_reason = passes_volume_filter(df_struct, s["zone_created_idx"])
+        if not vol_ok:
+            continue
+
+        atr_val = df_struct.loc[i, "atr"] if pd.notna(df_struct.loc[i, "atr"]) else 0.0
+
+        # ⭐ v1.9_REALISTIC: evaluate_zones_at_current_time 에서 미리 계산된 값 재사용
+        rp = int(z["run_potential"])
+        rp_tags = z["run_tags"]
+        grade = classify_grade(float(eff_score), rp)
+        h4_market_state = df_struct.loc[i, "market_state"]
+
+        if s["type"] == "short":
+            if df_struct.loc[i, "trend"] == "up":
+                continue
+
+            h1_confirm = has_recent_h1_choch(
+                df_h1_local=df_h1,
+                h4_timestamp=df_struct.loc[i, "timestamp"],
+                side="short",
+                lookback_hours=H1_CHOCH_CONFIRM_HOURS,
+            )
+
+            base_entry_candidate = s["zone_low"] + (s["zone_high"] - s["zone_low"]) * SHORT_BASE_ENTRY_FRAC
+
+            refined_entry_candidate, improved, refine_px, refine_reason = refine_entry_with_h1_fvg(
+                df_h1_local=df_h1,
+                h4_timestamp=df_struct.loc[i, "timestamp"],
+                side="short",
+                zone_low=s["zone_low"],
+                zone_high=s["zone_high"],
+                base_entry=base_entry_candidate,
+                lookback_hours=H1_REFINE_LOOKBACK_HOURS,
+                max_improve_frac=H1_REFINE_MAX_IMPROVE_FRAC,
+            )
+
+            # [HONEST-FALLBACK] fill_entry_price 결정
+            if current_price is not None:
+                # 실시간 모드: 현재가 = 체결가 (시장가 주문)
+                fill_entry_price = float(current_price)
+            else:
+                # 백테스트 호환 모드
+                fill_entry_price = float(max(s["zone_low"], min(row["open"], s["zone_high"])))
+                if row["high"] >= refined_entry_candidate:
+                    fill_entry_price = float(refined_entry_candidate)
+
+            raw_sl = s["sweep_ref"] + atr_val * SL_BUFFER_MULT
+            sl_candidate = clamp_stop_for_short(fill_entry_price, raw_sl, atr_val)
+            if sl_candidate <= fill_entry_price:
+                continue
+
+            # ⭐ Stage 4K: evaluate_zones 에서 미리 계산된 값 재사용 ⭐
+            pre_sweep = z["tier_pre_sweep"]
+            pre_fvg = z["tier_pre_fvg"]
+            pre_ob = z["tier_pre_ob"]
+            pre_total = z["tier_pre_total"]
+            wick_r5 = z["wick_ratio_5"]
+            tier_label = z["tier"]
+            tier_mult_raw = z["tier_mult_raw"]
+            rp_action = z["rp_action"]
+            tier_mult = z["tier_mult_final"]
+            effective_notional_cap = z["effective_notional_cap"]
+            stage4j_mult = z.get("stage4j_mult", 1.0)
+            stage4j_label = z.get("stage4j_label", "DEFAULT")
+            atoms_dict = z.get("atoms_dict", {})
+
+            # tier 가 passable 이 아니면 위에서 이미 continue 처리됨.
+            # 여기서는 tier_mult > 0 이 보장됨.
+
+            # ⭐ Stage 4K: Sentiment Momentum lookback (직전 7일 LS 격차) ⭐
+            entry_time_now = df_struct.loc[i, "timestamp"]
+            sentiment_mult, sentiment_label = get_stage4k_sentiment_mult(
+                target_time=entry_time_now,
+                side="short",
+            )
+
+            # ⭐⭐⭐ Stage 3 Wave-aware 처방 (옵션 A+B+C + Balance-aware) ⭐⭐⭐
+            step3_mult, step3_info = get_step3_risk_multipliers(
+                df_struct=df_struct, df_h1=df_h1, df_d1=df_d1,
+                i=i, side="short", balance=float(balance),
+            )
+
+            # 최종 risk_pct: tier_mult × sentiment × step3 (pd_aware × weak_setup × wave_pattern)
+            risk_pct_adjusted = float(risk_pct) * float(tier_mult) * float(sentiment_mult) * float(step3_mult)
+
+            qty_candidate, risk_per_unit, notional_candidate = calc_position_size(
+                balance=balance,
+                risk_pct=risk_pct_adjusted,
+                entry=fill_entry_price,
+                sl=sl_candidate,
+                fee_rate=fee_rate,
+                max_notional_mult=effective_notional_cap,
+            )
+            if qty_candidate is None:
+                continue
+
+            expansion_candidate = get_expansion_state(
+                market_state=h4_market_state,
+                h1_choch_confirm=h1_confirm,
+            )
+            plan = get_tp_plan(expansion_candidate)
+
+            return {
+                "should_enter": True,
+                "timestamp": str(df_struct.loc[i, "timestamp"]),
+                "h4_closed_index": int(i),
+                "side": "Sell",
+                "position_side": "short",
+                "entry": float(fill_entry_price),
+                "base_entry": float(base_entry_candidate),
+                "entry_refined": bool(improved),
+                "refined_entry_px": float(refine_px) if pd.notna(refine_px) else None,
+                "refine_tag": refine_reason,
+                "sl": float(sl_candidate),
+                "qty": float(qty_candidate),
+                "notional": float(notional_candidate),
+                "risk_per_unit": float(risk_per_unit),
+                "score": float(eff_score),
+                "base_score": float(s["score"]),
+                "fresh_reasons": fresh_reasons,
+                "grade": grade,
+                "run_potential": int(rp),
+                "run_tags": rp_tags,
+                "tp_plan_name": plan["name"],
+                "tp_plan": plan,
+                "expansion_state": bool(expansion_candidate),
+                "reasons": s["reasons"],
+                "zone_low": float(s["zone_low"]),
+                "zone_high": float(s["zone_high"]),
+                "sweep_ref": float(s["sweep_ref"]),
+                "trend": str(df_struct.loc[i, "trend"]),
+                "market_state": str(h4_market_state),
+                "h1_choch_confirm": bool(h1_confirm),
+                "h1_choch_time": str(get_recent_h1_choch_time(df_h1, df_struct.loc[i, "timestamp"], "short", H1_CHOCH_CONFIRM_HOURS)),
+                "tier": str(tier_label),                       # 4K: ALPHA_MAX/HIGH/MED/SWEEP_GEM/...
+                "tier_mult": float(tier_mult),                 # base × rp × stage4j (sentiment 제외)
+                "tier_mult_raw": float(tier_mult_raw),
+                "rp_action": str(rp_action),
+                "effective_notional_cap": float(effective_notional_cap),
+                "tier_pre_total": int(pre_total),
+                "tier_sweep_count": int(pre_sweep),
+                "tier_fvg_count": int(pre_fvg),
+                "tier_ob_count": int(pre_ob),
+                "tier_wick_ratio_5": float(wick_r5) if wick_r5 is not None and not pd.isna(wick_r5) else None,
+                "risk_pct_base": float(risk_pct),
+                "risk_pct_tier_adjusted": float(risk_pct_adjusted),
+                # ⭐ Stage 4K 신규 필드 ⭐
+                "stage4j_mult":     float(stage4j_mult),
+                "stage4j_label":    str(stage4j_label),
+                "sentiment_mult":   float(sentiment_mult),
+                "sentiment_label":  str(sentiment_label),
+                "atoms_dict":       atoms_dict,
+            }
+
+        if s["type"] == "long":
+            if df_struct.loc[i, "trend"] == "down":
+                continue
+
+            h1_confirm = has_recent_h1_choch(
+                df_h1_local=df_h1,
+                h4_timestamp=df_struct.loc[i, "timestamp"],
+                side="long",
+                lookback_hours=H1_CHOCH_CONFIRM_HOURS,
+            )
+
+            base_entry_candidate = s["zone_low"] + (s["zone_high"] - s["zone_low"]) * LONG_BASE_ENTRY_FRAC
+
+            refined_entry_candidate, improved, refine_px, refine_reason = refine_entry_with_h1_fvg(
+                df_h1_local=df_h1,
+                h4_timestamp=df_struct.loc[i, "timestamp"],
+                side="long",
+                zone_low=s["zone_low"],
+                zone_high=s["zone_high"],
+                base_entry=base_entry_candidate,
+                lookback_hours=H1_REFINE_LOOKBACK_HOURS,
+                max_improve_frac=H1_REFINE_MAX_IMPROVE_FRAC,
+            )
+
+            # [HONEST-FALLBACK] fill_entry_price 결정
+            if current_price is not None:
+                # 실시간 모드: 현재가 = 체결가 (시장가 주문)
+                fill_entry_price = float(current_price)
+            else:
+                # 백테스트 호환 모드
+                fill_entry_price = float(max(s["zone_low"], min(row["open"], s["zone_high"])))
+                if row["low"] <= refined_entry_candidate:
+                    fill_entry_price = float(refined_entry_candidate)
+
+            raw_sl = s["sweep_ref"] - atr_val * SL_BUFFER_MULT
+            sl_candidate = clamp_stop_for_long(fill_entry_price, raw_sl, atr_val)
+            if sl_candidate >= fill_entry_price:
+                continue
+
+            # ⭐ Stage 4K: evaluate_zones 에서 미리 계산된 값 재사용 ⭐
+            pre_sweep = z["tier_pre_sweep"]
+            pre_fvg = z["tier_pre_fvg"]
+            pre_ob = z["tier_pre_ob"]
+            pre_total = z["tier_pre_total"]
+            wick_r5 = z["wick_ratio_5"]
+            tier_label = z["tier"]
+            tier_mult_raw = z["tier_mult_raw"]
+            rp_action = z["rp_action"]
+            tier_mult = z["tier_mult_final"]
+            effective_notional_cap = z["effective_notional_cap"]
+            stage4j_mult = z.get("stage4j_mult", 1.0)
+            stage4j_label = z.get("stage4j_label", "DEFAULT")
+            atoms_dict = z.get("atoms_dict", {})
+
+            # tier 가 passable 이 아니면 위에서 이미 continue 처리됨.
+
+            # ⭐ Stage 4K: Sentiment Momentum lookback (직전 7일 LS 격차) ⭐
+            entry_time_now = df_struct.loc[i, "timestamp"]
+            sentiment_mult, sentiment_label = get_stage4k_sentiment_mult(
+                target_time=entry_time_now,
+                side="long",
+            )
+
+            # ⭐⭐⭐ Stage 3 Wave-aware 처방 (옵션 A+B+C + Balance-aware) ⭐⭐⭐
+            step3_mult, step3_info = get_step3_risk_multipliers(
+                df_struct=df_struct, df_h1=df_h1, df_d1=df_d1,
+                i=i, side="long", balance=float(balance),
+            )
+
+            risk_pct_adjusted = float(risk_pct) * float(tier_mult) * float(sentiment_mult) * float(step3_mult)
+
+            qty_candidate, risk_per_unit, notional_candidate = calc_position_size(
+                balance=balance,
+                risk_pct=risk_pct_adjusted,
+                entry=fill_entry_price,
+                sl=sl_candidate,
+                fee_rate=fee_rate,
+                max_notional_mult=effective_notional_cap,
+            )
+            if qty_candidate is None:
+                continue
+
+            expansion_candidate = get_expansion_state(
+                market_state=h4_market_state,
+                h1_choch_confirm=h1_confirm,
+            )
+            plan = get_tp_plan(expansion_candidate)
+
+            return {
+                "should_enter": True,
+                "timestamp": str(df_struct.loc[i, "timestamp"]),
+                "h4_closed_index": int(i),
+                "side": "Buy",
+                "position_side": "long",
+                "entry": float(fill_entry_price),
+                "base_entry": float(base_entry_candidate),
+                "entry_refined": bool(improved),
+                "refined_entry_px": float(refine_px) if pd.notna(refine_px) else None,
+                "refine_tag": refine_reason,
+                "sl": float(sl_candidate),
+                "qty": float(qty_candidate),
+                "notional": float(notional_candidate),
+                "risk_per_unit": float(risk_per_unit),
+                "score": float(eff_score),
+                "base_score": float(s["score"]),
+                "fresh_reasons": fresh_reasons,
+                "grade": grade,
+                "run_potential": int(rp),
+                "run_tags": rp_tags,
+                "tp_plan_name": plan["name"],
+                "tp_plan": plan,
+                "expansion_state": bool(expansion_candidate),
+                "reasons": s["reasons"],
+                "zone_low": float(s["zone_low"]),
+                "zone_high": float(s["zone_high"]),
+                "sweep_ref": float(s["sweep_ref"]),
+                "trend": str(df_struct.loc[i, "trend"]),
+                "market_state": str(h4_market_state),
+                "h1_choch_confirm": bool(h1_confirm),
+                "h1_choch_time": str(get_recent_h1_choch_time(df_h1, df_struct.loc[i, "timestamp"], "long", H1_CHOCH_CONFIRM_HOURS)),
+                "tier": str(tier_label),
+                "tier_mult": float(tier_mult),
+                "tier_mult_raw": float(tier_mult_raw),
+                "rp_action": str(rp_action),
+                "effective_notional_cap": float(effective_notional_cap),
+                "tier_pre_total": int(pre_total),
+                "tier_sweep_count": int(pre_sweep),
+                "tier_fvg_count": int(pre_fvg),
+                "tier_ob_count": int(pre_ob),
+                "tier_wick_ratio_5": float(wick_r5) if wick_r5 is not None and not pd.isna(wick_r5) else None,
+                "risk_pct_base": float(risk_pct),
+                "risk_pct_tier_adjusted": float(risk_pct_adjusted),
+                # ⭐ Stage 4K 신규 필드 ⭐
+                "stage4j_mult":     float(stage4j_mult),
+                "stage4j_label":    str(stage4j_label),
+                "sentiment_mult":   float(sentiment_mult),
+                "sentiment_label":  str(sentiment_label),
+                "atoms_dict":       atoms_dict,
+            }
+
+    return {
+        "should_enter": False,
+        "reason": "no_valid_signal_on_latest_closed_h4",
+        "timestamp": str(df_struct.loc[i, "timestamp"]),
+        "candidate_count": len(evaluated_zones),
+        "same_side_cooldown": str(same_side_block) if same_side_block else None,
+        "trend": str(df_struct.loc[i, "trend"]),
+        "market_state": str(df_struct.loc[i, "market_state"]),
+        "latest_close": float(df_struct.loc[i, "close"]),
+    }

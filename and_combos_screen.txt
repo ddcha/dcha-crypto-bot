@@ -1,0 +1,9 @@
+~a_fvg,~a_pre_total_ge4
+~a_volume,~a_sweep,~a_fvg
+~a_volume,a_wick_le_q1,~a_fvg
+~a_volume,~a_trend_align,~a_fvg
+~a_fvg,a_wick_le_q1,~a_trend_align
+~a_volume,~a_pre_total_ge4,~a_fvg
+~a_fvg,~a_sweep,a_wick_le_q1
+~a_fvg,~a_volume
+~a_fvg

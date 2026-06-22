@@ -1,0 +1,41 @@
+# ── 데이터·캐시 (대용량, Binance Vision 다운로드 산물) ──────────────
+data_cache/
+data_cache_lb5/
+tv_data/
+*.parquet
+
+# ── 백테스트 산출물 / 로그 ───────────────────────────────────────────
+*.log
+*.xlsx
+*.zip
+# 결과 CSV (코드가 아님). 명시적으로 추적할 CSV 는 git add -f 로.
+*.csv
+*_outputs/
+*_out/
+_golden_out/
+_golden_lock/
+_module_out/
+_golden_checksums.txt
+stage4*_outputs/
+stage4*_out/
+stage4l_*/
+retire_walkforward_results/
+walk_forward_results_v3/
+sweep_analysis_outputs/
+*_results/
+fvgonly_out/
+stage4d_honest/
+full_before/
+full_after/
+
+# ── 파이썬 ───────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+venv/
+.venv/
+*.egg-info/
+
+# ── 기타 입력 묶음 ───────────────────────────────────────────────────
+files2/
+files5/
+"index engine files"/
