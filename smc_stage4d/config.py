@@ -161,12 +161,12 @@ SL_BUFFER_MULT = 0.08
 MIN_SCORE = float(_os_cfg.environ.get("MIN_SCORE", "7.5"))   # ⭐ 진입 문턱. env로 6.0~9.0 스윕 (예: MIN_SCORE=6.0)
 # ⭐ OB 정의 토글: "strict"=정통(기원 base캔들+바디) / "legacy"=직전 반대캔들 풀레인지 /
 #                  "engulf"=직전 반대캔들보다 큰(바디) 임펄스 출현 시, 그 *직전 반대캔들의 바디*를 OB로
-OB_MODE = _os_cfg.environ.get("OB_MODE", "strict")
+OB_MODE = _os_cfg.environ.get("OB_MODE", "engulf")   # 채택 baseline(18런 근거). 옛값: "strict"
 
 # ── 존 게이트 엄밀화 스윕 (H4 전용) — feature/gate-tighten ──
 #   기본값=현행 → env 없이 돌리면 baseline 과 동일(회귀 0).
 SWEEP_RECENT_N   = int(_os_cfg.environ.get("SWEEP_RECENT_N", "10"))      # H4 recent-sweep 봉수
-DISP_ATR_MULT    = float(_os_cfg.environ.get("DISP_ATR_MULT", "0.90"))   # displacement 최소 레인지/ATR
+DISP_ATR_MULT    = float(_os_cfg.environ.get("DISP_ATR_MULT", "1.3"))    # 채택 baseline(displacement 진짜 임펄스). 옛값: 0.90
 DISP_BODY_RATIO  = float(_os_cfg.environ.get("DISP_BODY_RATIO", "0.45")) # displacement 최소 바디비율
 MSS_MODE         = _os_cfg.environ.get("MSS_MODE", "legacy")             # "legacy"(롤링맥스) | "choch"(스윙기반)
 
@@ -197,7 +197,7 @@ H1_CHOCH_CONFIRM_HOURS = 16
 # ── H1×H4 존 정밀화(refine) 토글 — feature/h1-refine-zone ──
 #   1 이면 H4 FVG/OB 존을 H1 FVG/OB 와의 가격겹침 교집합으로 좁혀 진입가·손절을 타이트화.
 #   기본 off → baseline(=원본) 동작 그대로 보존. (의도된 동작 변경, 효과는 CI 로 측정)
-USE_H1_REFINE = _os_cfg.environ.get("USE_H1_REFINE", "0") == "1"
+USE_H1_REFINE = _os_cfg.environ.get("USE_H1_REFINE", "1") == "1"   # 채택 baseline(인과 + 확인). 옛값: "0"(off)
 
 RUNNER_PROXY_TARGET3 = True
 RUNNER_PROXY_MAX_RR = 5.0
