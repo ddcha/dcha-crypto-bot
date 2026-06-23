@@ -1344,6 +1344,11 @@ def simulate_scenario_v19b_rpboost(scenario, candidates_dict, risk_multiplier=1.
                     "zone_low_pre":    float(row.get("zone_low_pre", np.nan)),
                     "zone_high_pre":   float(row.get("zone_high_pre", np.nan)),
                     "ob_mode":         row.get("ob_mode", OB_MODE),
+                    # ── feature/gate-tighten: 게이트 설정 자기문서화 ──
+                    "sweep_recent_n":  int(SWEEP_RECENT_N),
+                    "disp_atr_mult":   float(DISP_ATR_MULT),
+                    "disp_body_ratio": float(DISP_BODY_RATIO),
+                    "mss_mode":        str(MSS_MODE),
                     "a_room":             bool(_atoms_final.get("a_room", False)),
                     "a_efficiency":       bool(_atoms_final.get("a_efficiency", False)),
                     "a_bb_squeeze":       bool(_atoms_final.get("a_bb_squeeze", False)),

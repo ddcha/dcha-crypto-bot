@@ -187,7 +187,7 @@ def build_structures(df):
     # ⭐ numpy화(2026-06): 기존 .loc 3중루프 → 컬럼 배열 사전추출 + Loop1 벡터화.
     #   결과 바이트 동일(OLD vs NEW 차등검증 60회/19,106 structures/불일치 0, sweep컬럼 0).
     #   속도 n=6000 기준 5.24s→0.12s(≈45x). OB_MODE 무관(OB컬럼은 상류 apply_ob 산출물을 읽기만).
-    recent_sweep_n = 10
+    recent_sweep_n = SWEEP_RECENT_N   # feature/gate-tighten: H4 recent-sweep 봉수 (기본 10)
     df = df.copy()
     n = len(df)
 
@@ -512,13 +512,18 @@ def apply_indicators_and_build(raw):
 
     df = apply_basic_indicators(df)
     df = apply_mss(df, mss_lookback=H4_MSS_LOOKBACK)
-    df = apply_displacement(df)
+    # feature/gate-tighten: H4 displacement 문턱을 env 로 (H1 호출 526 은 기본값 유지)
+    df = apply_displacement(df, disp_body_ratio=DISP_BODY_RATIO, disp_atr_mult=DISP_ATR_MULT)
     df = apply_fvg(df)
     df = apply_ob(df, ob_lookback=H4_OB_LOOKBACK)
     df = apply_pd(df, pd_lookback=H4_PD_LOOKBACK)
     df = apply_pivots(df, swing_len=H4_PIVOT_SWING_LEN)
     df = apply_structure_bias(df)
     df = apply_choch(df, break_atr_mult=H4_CHOCH_BREAK_ATR_MULT)
+    # feature/gate-tighten: MSS=choch 면 스윙 구조 기반 CHoCH 로 H4 MSS 대체 (legacy=롤링맥스 유지)
+    if MSS_MODE == "choch":
+        df["bull_mss"] = df["bull_choch"]
+        df["bear_mss"] = df["bear_choch"]
     df = apply_h4_market_state(df, transition_bars=H4_MARKET_STATE_BARS)
 
     df_h1 = apply_basic_indicators(df_h1)

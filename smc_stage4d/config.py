@@ -163,6 +163,13 @@ MIN_SCORE = float(_os_cfg.environ.get("MIN_SCORE", "7.5"))   # ⭐ 진입 문턱
 #                  "engulf"=직전 반대캔들보다 큰(바디) 임펄스 출현 시, 그 *직전 반대캔들의 바디*를 OB로
 OB_MODE = _os_cfg.environ.get("OB_MODE", "strict")
 
+# ── 존 게이트 엄밀화 스윕 (H4 전용) — feature/gate-tighten ──
+#   기본값=현행 → env 없이 돌리면 baseline 과 동일(회귀 0).
+SWEEP_RECENT_N   = int(_os_cfg.environ.get("SWEEP_RECENT_N", "10"))      # H4 recent-sweep 봉수
+DISP_ATR_MULT    = float(_os_cfg.environ.get("DISP_ATR_MULT", "0.90"))   # displacement 최소 레인지/ATR
+DISP_BODY_RATIO  = float(_os_cfg.environ.get("DISP_BODY_RATIO", "0.45")) # displacement 최소 바디비율
+MSS_MODE         = _os_cfg.environ.get("MSS_MODE", "legacy")             # "legacy"(롤링맥스) | "choch"(스윙기반)
+
 # v1.9: 쿨다운 유지, DayLimit 해제
 SAME_SIDE_COOLDOWN_BARS = 6
 DAY_TRADE_LIMIT = 999
