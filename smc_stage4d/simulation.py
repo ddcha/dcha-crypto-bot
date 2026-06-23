@@ -432,6 +432,11 @@ def generate_candidates_from_prepared(prepared):
                 return False
         return True
 
+    # ── COMBO UNION: 12조합(각 AND) 중 하나라도 만족하면 진입; 매칭 조합 키 리스트 반환 ──
+    def _combo_union_match(tags):
+        return [_k for _k, _atoms in COMBOS.items()
+                if all(bool(tags.get(_a, False)) for _a in _atoms)]
+
     def _track_skip(reason):
         skip_reasons[reason] = skip_reasons.get(reason, 0) + 1
 
@@ -484,6 +489,7 @@ def generate_candidates_from_prepared(prepared):
         _zhi_pre = np.nan
         _rlo_ref = np.nan
         _rhi_ref = np.nan
+        _combos_matched = []   # COMBO UNION: 이 진입이 매칭한 조합 키들
         h4_market_state = df_struct.loc[_sb(i, 4), "market_state"]  # S3: 신호봉
         pre_sweep_v = pre_fvg_v = pre_ob_v = pre_total_v = 0
         wick_ratio_v = 0.0
@@ -670,7 +676,7 @@ def generate_candidates_from_prepared(prepared):
                 expansion_candidate = get_expansion_state(h4_market_state, h1_confirm_short)
                 plan = get_tp_plan(expansion_candidate)
 
-                if _ATOM_OR_RAW or _ATOM_AND_RAW:  # 원자 진입게이트 (실값 atoms, _ti=정직봉)
+                if USE_COMBO_UNION or _ATOM_OR_RAW or _ATOM_AND_RAW:  # 원자/조합 진입게이트 (실값 atoms, _ti=정직봉)
                     _gtags = compute_trade_tags(
                             df_struct=df_struct, entry_idx=_ti, zone_created_idx=s["zone_created_idx"],
                             zone_low=s["zone_low"], zone_high=s["zone_high"], side="short",
@@ -682,6 +688,11 @@ def generate_candidates_from_prepared(prepared):
                     if not _atom_and_pass(_gtags):
                         _track_skip("atom_and_gate_fail")
                         continue
+                    if USE_COMBO_UNION:                       # COMBO UNION: 12조합 OR
+                        _combos_matched = _combo_union_match(_gtags)
+                        if not _combos_matched:
+                            _track_skip("combo_union_fail")
+                            continue
 
                 entry_found = True
                 used_structure = s
@@ -775,7 +786,7 @@ def generate_candidates_from_prepared(prepared):
                 expansion_candidate = get_expansion_state(h4_market_state, h1_confirm_long)
                 plan = get_tp_plan(expansion_candidate)
 
-                if _ATOM_OR_RAW or _ATOM_AND_RAW:  # 원자 진입게이트 (실값 atoms, _ti=정직봉)
+                if USE_COMBO_UNION or _ATOM_OR_RAW or _ATOM_AND_RAW:  # 원자/조합 진입게이트 (실값 atoms, _ti=정직봉)
                     _gtags = compute_trade_tags(
                             df_struct=df_struct, entry_idx=_ti, zone_created_idx=s["zone_created_idx"],
                             zone_low=s["zone_low"], zone_high=s["zone_high"], side="long",
@@ -787,6 +798,11 @@ def generate_candidates_from_prepared(prepared):
                     if not _atom_and_pass(_gtags):
                         _track_skip("atom_and_gate_fail")
                         continue
+                    if USE_COMBO_UNION:                       # COMBO UNION: 12조합 OR
+                        _combos_matched = _combo_union_match(_gtags)
+                        if not _combos_matched:
+                            _track_skip("combo_union_fail")
+                            continue
 
                 entry_found = True
                 used_structure = s
@@ -898,6 +914,7 @@ def generate_candidates_from_prepared(prepared):
             "h1_refined":     bool(_h1_refined),
             "h1_overlap_frac": float(_h1_overlap_frac),
             "ob_mode": OB_MODE,
+            "combos_matched": "|".join(_combos_matched),   # COMBO UNION: 이 진입이 매칭한 조합들
             "market_state": h4_market_state,
             # ⭐⭐ Stage 4D: atomic 재계산에 필요한 원본 필드
             "structure_reasons_raw": s.get("reasons", ""),
@@ -1349,6 +1366,7 @@ def simulate_scenario_v19b_rpboost(scenario, candidates_dict, risk_multiplier=1.
                     "disp_atr_mult":   float(DISP_ATR_MULT),
                     "disp_body_ratio": float(DISP_BODY_RATIO),
                     "mss_mode":        str(MSS_MODE),
+                    "combos_matched":  row.get("combos_matched", ""),
                     "a_room":             bool(_atoms_final.get("a_room", False)),
                     "a_efficiency":       bool(_atoms_final.get("a_efficiency", False)),
                     "a_bb_squeeze":       bool(_atoms_final.get("a_bb_squeeze", False)),

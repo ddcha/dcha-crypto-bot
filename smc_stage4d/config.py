@@ -131,6 +131,35 @@ elif ATOM_GATE_MODE == "OFF":
 else:
     raise ValueError(f"ATOM_GATE_MODE 잘못됨: {ATOM_GATE_MODE!r} (AND|OR12|CUSTOM|OFF 중 하나)")
 
+# ── feat/atom-tier-engulf-atr13: 12개 조합 게이트(AND) — env COMBO_KEY 로 선택 ──
+#   COMBO_KEY 지정 시 그 조합 원자를 AND 게이트로 박는다(ATOM_AND_LIST 강제 설정).
+#   순수 AND 만 적용되도록 ATOM_OR_LIST 는 제거(CUSTOM 모드의 OR 오염 방지).
+COMBOS = {
+    "c01_score_fvg_vol":                 ["a_score_ge13", "a_fvg", "a_vol_expansion"],
+    "c02_score_vol_volume_room":         ["a_score_ge13", "a_vol_expansion", "a_volume", "a_room"],
+    "c03_eff_fvg_vol_volume_wick_room":  ["a_efficiency", "a_fvg", "a_vol_expansion", "a_volume", "a_wick_le_q1", "a_room"],
+    "c04_eff_fvg_vol_volume_room":       ["a_efficiency", "a_fvg", "a_vol_expansion", "a_volume", "a_room"],
+    "c05_eff_fvg_vol_volume_wick":       ["a_efficiency", "a_fvg", "a_vol_expansion", "a_volume", "a_wick_le_q1"],
+    "c06_eff_fvg_vol_wick":              ["a_efficiency", "a_fvg", "a_vol_expansion", "a_wick_le_q1"],
+    "c07_eff_fvg_vol_room":              ["a_efficiency", "a_fvg", "a_vol_expansion", "a_room"],
+    "c08_eff_fvg_vol_volume":            ["a_efficiency", "a_fvg", "a_vol_expansion", "a_volume"],   # ★
+    "c09_score_vol":                     ["a_score_ge13", "a_vol_expansion"],
+    "c10_eff_fvg_vol":                   ["a_efficiency", "a_fvg", "a_vol_expansion"],
+    "c11_fvg_vol_wick":                  ["a_fvg", "a_vol_expansion", "a_wick_le_q1"],
+    "c12_fvg_vol":                       ["a_fvg", "a_vol_expansion"],
+}
+_combo_key = _os_cfg.environ.get("COMBO_KEY", "")
+if _combo_key:
+    if _combo_key not in COMBOS:
+        raise ValueError(f"COMBO_KEY 잘못됨: {_combo_key!r} (COMBOS 중 하나)")
+    _os_cfg.environ["ATOM_AND_LIST"] = ",".join(COMBOS[_combo_key])  # 강제(우선)
+    _os_cfg.environ.pop("ATOM_OR_LIST", None)                        # 순수 AND
+
+# ── COMBO UNION 모드: 12조합 OR(각 조합은 AND) 을 한 백테스트에서 모두 매매 가능하게 ──
+#   USE_COMBO_UNION=1 → 어느 조합이든 만족하면 진입, 트레이드에 매칭 조합 태그(combos_matched).
+#   → 단일 런으로 조합별 성과를 본다(13런 불필요). COMBO_KEY 와 배타적으로 쓰면 됨.
+USE_COMBO_UNION = _os_cfg.environ.get("USE_COMBO_UNION", "0") == "1"
+
 print("=" * 78)
 print(f"[ATOM GATE] mode={ATOM_GATE_MODE}  HONEST_STAGE={_os_cfg.environ.get('HONEST_STAGE')}")
 print(f"            ATOM_AND_LIST={_os_cfg.environ.get('ATOM_AND_LIST', '(none)')}")
