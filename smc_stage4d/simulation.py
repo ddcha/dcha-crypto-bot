@@ -1351,6 +1351,7 @@ def simulate_scenario_v19b_rpboost(scenario, candidates_dict, risk_multiplier=1.
                     "a_trend_align":      bool(_atoms_final.get("a_trend_align", False)),
                     "a_mss":              bool(_atoms_final.get("a_mss", False)),
                     "a_fvg":              bool(_atoms_final.get("a_fvg", False)),
+                    "a_ob":               bool(_atoms_final.get("a_ob", False)),   # ⭐ a_fvg 대칭 신규 원자
                     "a_overlap":          bool(_atoms_final.get("a_overlap", False)),
                     # ⭐ 존 구성 원본(only_OB / only_FVG / both 3분할 분석용) — build_structures reasons에서 정확 복원
                     "zone_has_ob":  bool(("valid_bull_ob"  in _struct_reasons_raw) or ("valid_bear_ob"  in _struct_reasons_raw)),

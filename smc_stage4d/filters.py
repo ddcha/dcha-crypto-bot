@@ -313,6 +313,14 @@ def compute_trade_tags(df_struct, entry_idx, zone_created_idx,
     else:
         tags["a_fvg"] = bool(_fvg_present)   # atr 없으면 존재만으로 (broad)
 
+    # ob — a_fvg 대칭: valid_bull/bear_ob 토큰 + 존두께 ≥ BROAD_OB_SIZE_ATR·ATR
+    _ob_present = ("valid_bull_ob" in reasons_set) or ("valid_bear_ob" in reasons_set)
+    if _ob_present and pd.notna(atr_val) and atr_val > 0:
+        _zsize_ob = abs(zone_high - zone_low)
+        tags["a_ob"] = bool((_zsize_ob / atr_val) >= BROAD_OB_SIZE_ATR)
+    else:
+        tags["a_ob"] = bool(_ob_present)
+
     # a_room — ⭐broad: 타겟까지 거리 ≥ BROAD_ROOM_RR_MIN·ATR (risk≈1ATR SL 근사)
     #   기존: risk=atr*0.08(자의적), RR≥2.8. → risk=ATR, room≥1.5·ATR(broad).
     a_room = False

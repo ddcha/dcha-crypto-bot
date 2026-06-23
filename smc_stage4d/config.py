@@ -160,6 +160,16 @@ if _combo_key:
 #   → 단일 런으로 조합별 성과를 본다(13런 불필요). COMBO_KEY 와 배타적으로 쓰면 됨.
 USE_COMBO_UNION = _os_cfg.environ.get("USE_COMBO_UNION", "0") == "1"
 
+# ── ATOM_GATE_RULE: "a_ob OR a_score_ge13" / "x AND y" 자유표기 → ATOM_OR/AND_LIST 로 변환 ──
+_gate_rule = _os_cfg.environ.get("ATOM_GATE_RULE", "").strip()
+if _gate_rule:
+    if " AND " in _gate_rule:
+        _os_cfg.environ["ATOM_AND_LIST"] = ",".join(x.strip() for x in _gate_rule.split(" AND ") if x.strip())
+        _os_cfg.environ.pop("ATOM_OR_LIST", None)
+    else:
+        _os_cfg.environ["ATOM_OR_LIST"] = ",".join(x.strip() for x in _gate_rule.replace(" OR ", ",").split(",") if x.strip())
+        _os_cfg.environ.pop("ATOM_AND_LIST", None)
+
 print("=" * 78)
 print(f"[ATOM GATE] mode={ATOM_GATE_MODE}  HONEST_STAGE={_os_cfg.environ.get('HONEST_STAGE')}")
 print(f"            ATOM_AND_LIST={_os_cfg.environ.get('ATOM_AND_LIST', '(none)')}")
@@ -405,6 +415,7 @@ SCENARIO_MULTI = {
 # =========================================================
 BROAD_VOL_RELVOL_MIN  = 1.5    # a_volume: 존형성창 max거래량 / median(20) ≥ 1.5 (기존 1.1 스파이크아님→1.5)
 BROAD_FVG_SIZE_ATR    = 0.10   # a_fvg: 존(임밸런스) 크기 ≥ 0.10·ATR (미세 갭만 배제)
+BROAD_OB_SIZE_ATR     = float(_os_cfg.environ.get("BROAD_OB_SIZE_ATR", "0.10"))  # a_ob: a_fvg 대칭(기본=BROAD_FVG_SIZE_ATR)
 BROAD_SCORE_STRONG    = 10.0   # a_score_ge13: 절대 13(tight) → 10(진입floor 7.5 대비 '강', broad)
 BROAD_SWEEP_CNT_MIN   = 2      # a_sweep_count_2_4: 밴드(2~4) → 단조 ≥2 (broad)
 BROAD_WICK_MAX        = 0.35   # a_wick_le_q1: 0.23(Q1,tight) → 0.35 (broad, '접근 깨끗함' 개념 유지)
