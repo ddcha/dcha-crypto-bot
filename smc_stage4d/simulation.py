@@ -866,10 +866,10 @@ def generate_candidates_from_prepared(prepared):
             "fill_time_h1":    _v17_fill_time_h1,
             "fill_bars_waited": _v17_fill_bars_waited,
             "base_entry": base_entry,
-            "entry_improved_by": 0.0,  # refine 없음
-            "entry_refined": False,
-            "refined_entry_px": np.nan,
-            "refine_tag": "refine_off",
+            "entry_improved_by": float(_h1_overlap_frac),     # H1 refine 겹침비율
+            "entry_refined": bool(_h1_refined),               # ⭐ 실제 H1 refine 반영(옛 죽은 False 제거)
+            "refined_entry_px": float(_rlo_ref if entry_side == "short" else _rhi_ref) if _h1_refined else np.nan,
+            "refine_tag": "h1_refine" if _h1_refined else "refine_off",
             "sl": sl,
             "risk_per_unit": abs(entry - sl),
             "r_multiple": sim["r_multiple"],
