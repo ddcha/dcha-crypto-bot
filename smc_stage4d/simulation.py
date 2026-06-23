@@ -477,6 +477,13 @@ def generate_candidates_from_prepared(prepared):
         entry_refined = False
         refine_tag = ""
         fill_entry_price = None
+        # ── feature/h1-refine-zone: refine 결과(트레이드 로그용) 기본값 ──
+        _h1_refined = False
+        _h1_overlap_frac = 0.0
+        _zlo_pre = np.nan
+        _zhi_pre = np.nan
+        _rlo_ref = np.nan
+        _rhi_ref = np.nan
         h4_market_state = df_struct.loc[_sb(i, 4), "market_state"]  # S3: 신호봉
         pre_sweep_v = pre_fvg_v = pre_ob_v = pre_total_v = 0
         wick_ratio_v = 0.0
@@ -510,6 +517,20 @@ def generate_candidates_from_prepared(prepared):
             touched = (row["high"] >= s["zone_low"]) and (row["low"] <= s["zone_high"])
             if not touched:
                 continue
+
+            # ── feature/h1-refine-zone: H1×H4 존 정밀화 '계산' (룩어헤드 0, strict <) ──
+            #   여기선 계산만; 존 교체는 SHORT/LONG 분기에서 진입가·손절에만 적용한다.
+            #   confluence / 12원자 태그 / run_potential 은 H4 원본 존 그대로 유지 →
+            #   refine 효과가 R 기하에만 격리되어 CI 비교가 깨끗해진다.
+            _zlo_pre = float(s["zone_low"]); _zhi_pre = float(s["zone_high"])
+            _h1_refined = False; _h1_overlap_frac = 0.0
+            _rlo_ref = _zlo_pre; _rhi_ref = _zhi_pre
+            if USE_H1_REFINE:
+                _ets_ref = df_struct.loc[_sb(i, 3), "timestamp"]
+                _rlo_ref, _rhi_ref, _h1_refined, _h1_overlap_frac = refine_zone_with_h1(
+                    df_h1, _ets_ref, _zlo_pre, _zhi_pre,
+                    lookback_h1_bars=H1_REFINE_LOOKBACK_HOURS,
+                )
 
             # ⭐⭐ Stage 4D: 12 atomic 태그 계산 (모두 로그 전용, 게이트 아님)
             # pre_total / sweep_count / wick_ratio 는 structure 별로 계산된 값
@@ -621,6 +642,12 @@ def generate_candidates_from_prepared(prepared):
                     side="short", lookback_hours=H1_CHOCH_CONFIRM_HOURS
                 )
 
+                # ── feature/h1-refine-zone: refine 시 진입 존 교체(진입가·손절만) ──
+                #   SHORT 체결 = zone_low. refined zone_low(≥원본)로 진입가가 위로 →
+                #   sweep_ref(위쪽) 고정인 채 손절거리 자동 축소 = 타이트화(의도).
+                if USE_H1_REFINE and _h1_refined:
+                    s = dict(s); s["zone_low"] = _rlo_ref; s["zone_high"] = _rhi_ref
+
                 # ⭐⭐ Stage 2 Compare: REFINE 제거 + 실전 근사 fill
                 # SHORT 포지션: 가격이 상승해서 zone 에 진입 → zone_low 에서 처음 터치 → 시장가 체결
                 # 이게 실전 엔진의 current_price 체결과 가장 유사 (보수적 = 나쁜 SHORT entry)
@@ -719,6 +746,12 @@ def generate_candidates_from_prepared(prepared):
                     df_h1_local=df_h1, h4_timestamp=df_struct.loc[_sb(i, 4), "timestamp"],
                     side="long", lookback_hours=H1_CHOCH_CONFIRM_HOURS
                 )
+
+                # ── feature/h1-refine-zone: refine 시 진입 존 교체(진입가·손절만) ──
+                #   LONG 체결 = zone_high. refined zone_high(≤원본)로 진입가가 아래로 →
+                #   sweep_ref(아래쪽) 고정인 채 손절거리 자동 축소 = 타이트화(의도).
+                if USE_H1_REFINE and _h1_refined:
+                    s = dict(s); s["zone_low"] = _rlo_ref; s["zone_high"] = _rhi_ref
 
                 # ⭐⭐ Stage 2 Compare: REFINE 제거 + 실전 근사 fill
                 # LONG 포지션: 가격이 하락해서 zone 에 진입 → zone_high 에서 처음 터치 → 시장가 체결
@@ -859,6 +892,12 @@ def generate_candidates_from_prepared(prepared):
             "zone_created_idx": used_structure["zone_created_idx"],
             "zone_low": float(used_structure["zone_low"]),
             "zone_high": float(used_structure["zone_high"]),
+            # ── feature/h1-refine-zone: refine 감사 컬럼 (refine 전 H4 존 + 겹침 정보) ──
+            "zone_low_pre":   float(_zlo_pre),
+            "zone_high_pre":  float(_zhi_pre),
+            "h1_refined":     bool(_h1_refined),
+            "h1_overlap_frac": float(_h1_overlap_frac),
+            "ob_mode": OB_MODE,
             "market_state": h4_market_state,
             # ⭐⭐ Stage 4D: atomic 재계산에 필요한 원본 필드
             "structure_reasons_raw": s.get("reasons", ""),
@@ -1299,6 +1338,12 @@ def simulate_scenario_v19b_rpboost(scenario, candidates_dict, risk_multiplier=1.
                     # ⭐ 존 구성 원본(only_OB / only_FVG / both 3분할 분석용) — build_structures reasons에서 정확 복원
                     "zone_has_ob":  bool(("valid_bull_ob"  in _struct_reasons_raw) or ("valid_bear_ob"  in _struct_reasons_raw)),
                     "zone_has_fvg": bool(("valid_bull_fvg" in _struct_reasons_raw) or ("valid_bear_fvg" in _struct_reasons_raw)),
+                    # ── feature/h1-refine-zone: refine 결과 surface (감사·CI 비교용) ──
+                    "h1_refined":      bool(row.get("h1_refined", False)),
+                    "h1_overlap_frac": float(row.get("h1_overlap_frac", 0.0)),
+                    "zone_low_pre":    float(row.get("zone_low_pre", np.nan)),
+                    "zone_high_pre":   float(row.get("zone_high_pre", np.nan)),
+                    "ob_mode":         row.get("ob_mode", OB_MODE),
                     "a_room":             bool(_atoms_final.get("a_room", False)),
                     "a_efficiency":       bool(_atoms_final.get("a_efficiency", False)),
                     "a_bb_squeeze":       bool(_atoms_final.get("a_bb_squeeze", False)),

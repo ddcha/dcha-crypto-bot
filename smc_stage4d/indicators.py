@@ -382,3 +382,38 @@ def compute_wick_ratio_5(df_h4, df_h1, h4_entry_idx, side, lookback_n=5):
     if sum_range <= 0:
         return 0.0
     return sum_wick / sum_range
+
+
+# =========================================================================
+# ⭐ feature/h1-refine-zone — H1×H4 존 정밀화(refine)
+#    이 함수는 자동추출본이 아니라 feature 브랜치에서 직접 추가한 코드다.
+# =========================================================================
+def refine_zone_with_h1(df_h1, entry_h4_ts, z4_lo, z4_hi, lookback_h1_bars=12):
+    """
+    H4 존 [z4_lo,z4_hi]을 H1 FVG/OB 가격범위 겹침으로 정밀화.
+    겹치면 '가장 크게 겹치는' H1존과의 교집합으로 좁히고, 안 겹치면 H4 존 그대로.
+    ⭐ 룩어헤드 0: entry_h4_ts '미만'(strict <)으로 이미 닫힌 H1봉만 사용.
+       (ts=open시각, H1봉은 ts+1h에 확정 → ts<T 이면 T 이전에 닫힘 보장)
+    반환: (r_lo, r_hi, refined: bool, overlap_frac: float)
+    """
+    sel = (df_h1["timestamp"] < entry_h4_ts).values     # ⭐ tz-safe, strict <
+    if not sel.any():
+        return z4_lo, z4_hi, False, 0.0
+    last_idx = int(np.where(sel)[0][-1])
+    start_idx = max(0, last_idx - lookback_h1_bars + 1)
+    sub = df_h1.iloc[start_idx:last_idx + 1]
+    cols = [("bull_fvg_low","bull_fvg_high"),("bear_fvg_low","bear_fvg_high"),
+            ("bull_ob_low","bull_ob_high"),("bear_ob_low","bear_ob_high")]
+    best_lo = best_hi = None; best_ov = 0.0
+    for lo_c, hi_c in cols:
+        if lo_c not in sub.columns: continue
+        los = sub[lo_c].values.astype(float); his = sub[hi_c].values.astype(float)
+        for h1lo, h1hi in zip(los, his):
+            if np.isnan(h1lo) or np.isnan(h1hi): continue
+            ov = min(z4_hi, h1hi) - max(z4_lo, h1lo)
+            if ov > best_ov:
+                best_ov = ov; best_lo = max(z4_lo, h1lo); best_hi = min(z4_hi, h1hi)
+    if best_lo is None or best_hi <= best_lo:
+        return z4_lo, z4_hi, False, 0.0
+    w = z4_hi - z4_lo
+    return float(best_lo), float(best_hi), True, (best_ov / w if w > 0 else 0.0)

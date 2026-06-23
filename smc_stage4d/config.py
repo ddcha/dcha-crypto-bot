@@ -187,6 +187,11 @@ H1_REFINE_LOOKBACK_HOURS = 12
 H1_REFINE_MAX_IMPROVE_FRAC = 0.25
 H1_CHOCH_CONFIRM_HOURS = 16
 
+# ── H1×H4 존 정밀화(refine) 토글 — feature/h1-refine-zone ──
+#   1 이면 H4 FVG/OB 존을 H1 FVG/OB 와의 가격겹침 교집합으로 좁혀 진입가·손절을 타이트화.
+#   기본 off → baseline(=원본) 동작 그대로 보존. (의도된 동작 변경, 효과는 CI 로 측정)
+USE_H1_REFINE = _os_cfg.environ.get("USE_H1_REFINE", "0") == "1"
+
 RUNNER_PROXY_TARGET3 = True
 RUNNER_PROXY_MAX_RR = 5.0
 FAST_2R_BARS_MAX = 3
