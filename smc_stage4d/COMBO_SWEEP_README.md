@@ -67,3 +67,26 @@ python tools/combo_union_analyze.py combo_union_run
 - 조합 subset = `combos_matched` 에 그 키 포함된 트레이드. 조합들은 중첩(예: c08⊂c12).
 - 정렬 OOS_PF→sumR. 사후분할 대비 OOS 유지율로 채택/컷.
 - 단일 역사구간 in-sample — 데모 forward 전 확정 아님. **투자 조언 아님.**
+
+---
+
+## 🔁 COMBO_UNION_FIX 검증 + atom-tier 자본시뮬 (후처리, `tools/combo_tier_capital.py`)
+
+수정 스펙 4개 진단 검증:
+- **#1 refine: 오인** — refine 이미 ON(`h1_refined` 463/1204=**38.5%**). 스펙이 본 `entry_refined`(0)은 옛 삭제된 refine 의 죽은 컬럼.
+- #2/#3/#4(atom-tier S1/S2/A · mult 2.0/1.3/1.0 · 시드500+250×5)는 **trade set/R 을 안 바꾸는 자본 후처리** → 엔진 재실행 없이 적용. §6 체크리스트 7개 전부 OK(h1_refined·atom_tier·mult·balance≈500·phase·combos·룩어헤드0).
+
+**atom-tier 결과 (assign_tier = fvg/vol/eff/volume):**
+| tier | mult | n | OOS_PF | avgR |
+|------|----:|--:|-----:|-----:|
+| S1 (fvg+vol+eff+volume) | 2.0× | 504 | **0.883** | +0.109 |
+| S2 (fvg+vol+eff) | 1.3× | 85 | 0.723 | +0.017 |
+| A (fvg+vol⊕eff) | 1.0× | 511 | 0.805 | +0.024 |
+| **BASE (비fvg=score조합; 스펙은 제외)** | 1.0× | 94 | **2.090** | **+0.237** |
+
+### ⚠️ 핵심 — 티어 철학이 거꾸로
+- spec 이 **2.0× 로 키우라는 S1(fvg+vol+eff+volume) 이 OOS_PF 0.883(손실)**. fvg 기반 전 티어 OOS<1.
+- spec 이 **제외**하는 비-fvg(score조합 c02/c09)가 **OOS_PF 2.09 로 유일한 엣지** — 버려짐.
+- 티어 적용(literal): $4097(2.34×)·CAGR 35% 지만 **손실 티어를 2배 베팅 → MDD −42%**.
+- 결론: **edge 축은 fvg 가 아니라 score13.** 자본/티어 모델은 edge 순위를 못 바꾼다(R-기반 동일).
+- 권고: assign_tier 를 **score 기반**으로 재정의하거나, **c02/c09 단독 게이트** 로 진행.
