@@ -160,10 +160,20 @@ if _combo_key:
 #   → 단일 런으로 조합별 성과를 본다(13런 불필요). COMBO_KEY 와 배타적으로 쓰면 됨.
 USE_COMBO_UNION = _os_cfg.environ.get("USE_COMBO_UNION", "0") == "1"
 
-# ── ATOM_GATE_RULE: "a_ob OR a_score_ge13" / "x AND y" 자유표기 → ATOM_OR/AND_LIST 로 변환 ──
+# ── ATOM_GATE_RULE: "a_ob OR a_score_ge13" / "x AND y" / "x AND ANY_OTHER" → 게이트 env ──
+#   ANY_OTHER = score_ge13·overlap 제외 나머지 14원자 중 1개 이상 True.
+_ANYOTHER_ATOMS = ["a_sweep", "a_volume", "a_pre_total_ge4", "a_sweep_count_2_4", "a_wick_le_q1",
+                   "a_pre_total_ge1", "a_trend_align", "a_mss", "a_fvg", "a_ob", "a_room",
+                   "a_efficiency", "a_bb_squeeze", "a_vol_expansion"]
 _gate_rule = _os_cfg.environ.get("ATOM_GATE_RULE", "").strip()
 if _gate_rule:
-    if " AND " in _gate_rule:
+    if "ANY_OTHER" in _gate_rule:
+        # "a_score_ge13 AND ANY_OTHER" → AND(score) + ANYOTHER(나머지 OR)
+        _req = [x.strip() for x in _gate_rule.replace("ANY_OTHER", "").replace(" AND ", ",").split(",") if x.strip()]
+        _os_cfg.environ["ATOM_AND_LIST"] = ",".join(_req)
+        _os_cfg.environ["ATOM_ANYOTHER_LIST"] = ",".join(a for a in _ANYOTHER_ATOMS if a not in _req)
+        _os_cfg.environ.pop("ATOM_OR_LIST", None)
+    elif " AND " in _gate_rule:
         _os_cfg.environ["ATOM_AND_LIST"] = ",".join(x.strip() for x in _gate_rule.split(" AND ") if x.strip())
         _os_cfg.environ.pop("ATOM_OR_LIST", None)
     else:

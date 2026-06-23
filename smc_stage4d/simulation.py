@@ -437,6 +437,13 @@ def generate_candidates_from_prepared(prepared):
         return [_k for _k, _atoms in COMBOS.items()
                 if all(bool(tags.get(_a, False)) for _a in _atoms)]
 
+    # ── ANY_OTHER: "X AND ANY_OTHER" 룰용 — 지정 원자 중 1개라도 True (score_ge13 AND any-other) ──
+    _ATOM_ANYOTHER_RAW = [x.strip() for x in _os_h.environ.get("ATOM_ANYOTHER_LIST", "").split(",") if x.strip()]
+    def _atom_anyother_pass(tags):
+        if not _ATOM_ANYOTHER_RAW:
+            return True
+        return any(bool(tags.get(_a, False)) for _a in _ATOM_ANYOTHER_RAW)
+
     def _track_skip(reason):
         skip_reasons[reason] = skip_reasons.get(reason, 0) + 1
 
@@ -676,7 +683,7 @@ def generate_candidates_from_prepared(prepared):
                 expansion_candidate = get_expansion_state(h4_market_state, h1_confirm_short)
                 plan = get_tp_plan(expansion_candidate)
 
-                if USE_COMBO_UNION or _ATOM_OR_RAW or _ATOM_AND_RAW:  # 원자/조합 진입게이트 (실값 atoms, _ti=정직봉)
+                if USE_COMBO_UNION or _ATOM_OR_RAW or _ATOM_AND_RAW or _ATOM_ANYOTHER_RAW:  # 원자/조합 진입게이트 (실값 atoms, _ti=정직봉)
                     _gtags = compute_trade_tags(
                             df_struct=df_struct, entry_idx=_ti, zone_created_idx=s["zone_created_idx"],
                             zone_low=s["zone_low"], zone_high=s["zone_high"], side="short",
@@ -687,6 +694,9 @@ def generate_candidates_from_prepared(prepared):
                         continue
                     if not _atom_and_pass(_gtags):
                         _track_skip("atom_and_gate_fail")
+                        continue
+                    if not _atom_anyother_pass(_gtags):       # score AND (나머지 OR)
+                        _track_skip("atom_anyother_fail")
                         continue
                     if USE_COMBO_UNION:                       # COMBO UNION: 12조합 OR
                         _combos_matched = _combo_union_match(_gtags)
@@ -786,7 +796,7 @@ def generate_candidates_from_prepared(prepared):
                 expansion_candidate = get_expansion_state(h4_market_state, h1_confirm_long)
                 plan = get_tp_plan(expansion_candidate)
 
-                if USE_COMBO_UNION or _ATOM_OR_RAW or _ATOM_AND_RAW:  # 원자/조합 진입게이트 (실값 atoms, _ti=정직봉)
+                if USE_COMBO_UNION or _ATOM_OR_RAW or _ATOM_AND_RAW or _ATOM_ANYOTHER_RAW:  # 원자/조합 진입게이트 (실값 atoms, _ti=정직봉)
                     _gtags = compute_trade_tags(
                             df_struct=df_struct, entry_idx=_ti, zone_created_idx=s["zone_created_idx"],
                             zone_low=s["zone_low"], zone_high=s["zone_high"], side="long",
@@ -797,6 +807,9 @@ def generate_candidates_from_prepared(prepared):
                         continue
                     if not _atom_and_pass(_gtags):
                         _track_skip("atom_and_gate_fail")
+                        continue
+                    if not _atom_anyother_pass(_gtags):       # score AND (나머지 OR)
+                        _track_skip("atom_anyother_fail")
                         continue
                     if USE_COMBO_UNION:                       # COMBO UNION: 12조합 OR
                         _combos_matched = _combo_union_match(_gtags)
