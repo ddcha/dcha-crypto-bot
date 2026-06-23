@@ -39,3 +39,6 @@ venv/
 files2/
 files5/
 "index engine files"/
+
+# gate-tighten 18런 결과
+gate_sweep_runs/
