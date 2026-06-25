@@ -155,10 +155,19 @@ if _combo_key:
     _os_cfg.environ["ATOM_AND_LIST"] = ",".join(COMBOS[_combo_key])  # 강제(우선)
     _os_cfg.environ.pop("ATOM_OR_LIST", None)                        # 순수 AND
 
-# ── COMBO UNION 모드: 12조합 OR(각 조합은 AND) 을 한 백테스트에서 모두 매매 가능하게 ──
-#   USE_COMBO_UNION=1 → 어느 조합이든 만족하면 진입, 트레이드에 매칭 조합 태그(combos_matched).
-#   → 단일 런으로 조합별 성과를 본다(13런 불필요). COMBO_KEY 와 배타적으로 쓰면 됨.
+# ── COMBO UNION 모드: 조합들의 OR(각 조합은 AND) 을 단일 백테스트 게이트로 ──
+#   USE_COMBO_UNION=1 → 조합 리스트 중 "전 원자 True 인 조합이 하나라도 있으면" 진입(OR of ANDs).
+#   조합 소스: COMBO_UNION_JSON(env)으로 임의 조합 파일 지정 가능([{"key","atoms":[...]}, ...]).
+#     미지정 시 위 COMBOS(12개) 사용.
 USE_COMBO_UNION = _os_cfg.environ.get("USE_COMBO_UNION", "0") == "1"
+
+import json as _json_cfg
+COMBO_UNION_ATOMSETS = [list(v) for v in COMBOS.values()]   # 기본: 12조합
+_cuj = _os_cfg.environ.get("COMBO_UNION_JSON", "")
+if _cuj:
+    _cu_data = _json_cfg.load(open(_cuj, encoding="utf-8"))
+    COMBO_UNION_ATOMSETS = [list(c["atoms"]) for c in _cu_data]
+    print(f"[COMBO UNION] {_cuj} → {len(COMBO_UNION_ATOMSETS)}개 조합 OR 게이트")
 
 # ── ATOM_GATE_RULE: "a_ob OR a_score_ge13" / "x AND y" / "x AND ANY_OTHER" → 게이트 env ──
 #   ANY_OTHER = score_ge13·overlap 제외 나머지 14원자 중 1개 이상 True.

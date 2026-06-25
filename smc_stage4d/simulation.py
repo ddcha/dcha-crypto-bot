@@ -432,10 +432,10 @@ def generate_candidates_from_prepared(prepared):
                 return False
         return True
 
-    # ── COMBO UNION: 12조합(각 AND) 중 하나라도 만족하면 진입; 매칭 조합 키 리스트 반환 ──
+    # ── COMBO UNION: 조합셋 중 "전 원자 True 인 조합"이 하나라도 있으면 True(첫 매칭서 단락) ──
     def _combo_union_match(tags):
-        return [_k for _k, _atoms in COMBOS.items()
-                if all(bool(tags.get(_a, False)) for _a in _atoms)]
+        return any(all(bool(tags.get(_a, False)) for _a in _atoms)
+                   for _atoms in COMBO_UNION_ATOMSETS)
 
     # ── ANY_OTHER: "X AND ANY_OTHER" 룰용 — 지정 원자 중 1개라도 True (score_ge13 AND any-other) ──
     _ATOM_ANYOTHER_RAW = [x.strip() for x in _os_h.environ.get("ATOM_ANYOTHER_LIST", "").split(",") if x.strip()]
@@ -496,7 +496,7 @@ def generate_candidates_from_prepared(prepared):
         _zhi_pre = np.nan
         _rlo_ref = np.nan
         _rhi_ref = np.nan
-        _combos_matched = []   # COMBO UNION: 이 진입이 매칭한 조합 키들
+        _combos_matched = 0    # COMBO UNION: 이 진입이 매칭한 조합 개수
         h4_market_state = df_struct.loc[_sb(i, 4), "market_state"]  # S3: 신호봉
         pre_sweep_v = pre_fvg_v = pre_ob_v = pre_total_v = 0
         wick_ratio_v = 0.0
@@ -927,7 +927,7 @@ def generate_candidates_from_prepared(prepared):
             "h1_refined":     bool(_h1_refined),
             "h1_overlap_frac": float(_h1_overlap_frac),
             "ob_mode": OB_MODE,
-            "combos_matched": "|".join(_combos_matched),   # COMBO UNION: 이 진입이 매칭한 조합들
+            "n_combos_matched": int(_combos_matched),   # COMBO UNION: 매칭한 조합 개수
             "market_state": h4_market_state,
             # ⭐⭐ Stage 4D: atomic 재계산에 필요한 원본 필드
             "structure_reasons_raw": s.get("reasons", ""),
@@ -1380,7 +1380,7 @@ def simulate_scenario_v19b_rpboost(scenario, candidates_dict, risk_multiplier=1.
                     "disp_atr_mult":   float(DISP_ATR_MULT),
                     "disp_body_ratio": float(DISP_BODY_RATIO),
                     "mss_mode":        str(MSS_MODE),
-                    "combos_matched":  row.get("combos_matched", ""),
+                    "n_combos_matched":  int(row.get("n_combos_matched", 0)),
                     "a_room":             bool(_atoms_final.get("a_room", False)),
                     "a_efficiency":       bool(_atoms_final.get("a_efficiency", False)),
                     "a_bb_squeeze":       bool(_atoms_final.get("a_bb_squeeze", False)),

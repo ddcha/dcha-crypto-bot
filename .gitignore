@@ -49,3 +49,10 @@ out_union_fixed/
 out_obscore/
 out_score/
 out_solo_*/
+combo_sweep_results*.csv
+combos_filtered.json
+combo_sweep_part*.csv
+part*.log
+union1501_result/
+union257_result/
+union_summary.csv
