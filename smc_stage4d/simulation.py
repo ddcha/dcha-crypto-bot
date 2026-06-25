@@ -381,6 +381,11 @@ def generate_candidates_from_prepared(prepared):
 
     for s in structures:
         s["used"] = False
+        # ⭐ 비멱등 수정: advance_zone_lifespan 의 _ls_* 증분상태도 함께 리셋.
+        #    (안 하면 같은 prepared 2번째+ 호출 시 _ls_pos 가 시리즈 끝까지 전진해 있어
+        #     모든 존이 '끝 시점 역할'로 판정 = 룩어헤드성 오염. 멱등성 보장.)
+        for _lk in ("_ls_orig", "_ls_role", "_ls_broken", "_ls_pos"):
+            s.pop(_lk, None)
 
     candidates = []
     skip_reasons = {}
