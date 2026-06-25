@@ -1,0 +1,2 @@
+name,n,win_pct,PF,IS_PF,OOS_PF,oosN,expR,Sharpe,MDD_R,r6_PF,r6_n,pf_2023,n_2023,pf_2024,n_2024,pf_2025,n_2025,pf_2026,n_2026,all_years_ge1,final_cap,mult_vs_dep,CAGR_pct,MDD_cap_pct,LA_mismatch,LA_checked
+pf12_negcut,1368,54.46,1.3087,1.2438,1.3677,411,0.1751,0.1237,-19.739,1.3057,906,1.4967,140,1.2724,482,1.3254,536,1.3024,210,True,14855.02,8.4886,112.86,-18.32,0,161300

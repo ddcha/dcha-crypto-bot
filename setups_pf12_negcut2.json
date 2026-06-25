@@ -1,0 +1,124 @@
+[
+ {
+  "key": "efficiency+fvg+volume+wick_le_q1",
+  "atoms": [
+   "a_efficiency",
+   "a_fvg",
+   "a_volume",
+   "a_wick_le_q1"
+  ]
+ },
+ {
+  "key": "room+score_ge13+trend_align+vol_expansion+volume+wick_le_q1",
+  "atoms": [
+   "a_room",
+   "a_score_ge13",
+   "a_trend_align",
+   "a_vol_expansion",
+   "a_volume",
+   "a_wick_le_q1"
+  ]
+ },
+ {
+  "key": "efficiency+fvg+room+vol_expansion+volume+wick_le_q1",
+  "atoms": [
+   "a_efficiency",
+   "a_fvg",
+   "a_room",
+   "a_vol_expansion",
+   "a_volume",
+   "a_wick_le_q1"
+  ]
+ },
+ {
+  "key": "efficiency+fvg+room+vol_expansion+volume",
+  "atoms": [
+   "a_efficiency",
+   "a_fvg",
+   "a_room",
+   "a_vol_expansion",
+   "a_volume"
+  ]
+ },
+ {
+  "key": "room+sweep+vol_expansion+wick_le_q1",
+  "atoms": [
+   "a_room",
+   "a_sweep",
+   "a_vol_expansion",
+   "a_wick_le_q1"
+  ]
+ },
+ {
+  "key": "efficiency+fvg+room+sweep_count_2_4+trend_align+wick_le_q1",
+  "atoms": [
+   "a_efficiency",
+   "a_fvg",
+   "a_room",
+   "a_sweep_count_2_4",
+   "a_trend_align",
+   "a_wick_le_q1"
+  ]
+ },
+ {
+  "key": "score_ge13+trend_align+vol_expansion+volume",
+  "atoms": [
+   "a_score_ge13",
+   "a_trend_align",
+   "a_vol_expansion",
+   "a_volume"
+  ]
+ },
+ {
+  "key": "ob+room+score_ge13+vol_expansion+volume+wick_le_q1",
+  "atoms": [
+   "a_ob",
+   "a_room",
+   "a_score_ge13",
+   "a_vol_expansion",
+   "a_volume",
+   "a_wick_le_q1"
+  ]
+ },
+ {
+  "key": "ob+pre_total_ge1+pre_total_ge4+vol_expansion+volume+wick_le_q1",
+  "atoms": [
+   "a_ob",
+   "a_pre_total_ge1",
+   "a_pre_total_ge4",
+   "a_vol_expansion",
+   "a_volume",
+   "a_wick_le_q1"
+  ]
+ },
+ {
+  "key": "bb_squeeze+ob+pre_total_ge1+pre_total_ge4+room+wick_le_q1",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_ob",
+   "a_pre_total_ge1",
+   "a_pre_total_ge4",
+   "a_room",
+   "a_wick_le_q1"
+  ]
+ },
+ {
+  "key": "efficiency+ob+room",
+  "atoms": [
+   "a_efficiency",
+   "a_ob",
+   "a_room"
+  ]
+ },
+ {
+  "key": "bb_squeeze+pre_total_ge1+pre_total_ge4+score_ge13+trend_align+wick_le_q1",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_pre_total_ge1",
+   "a_pre_total_ge4",
+   "a_score_ge13",
+   "a_trend_align",
+   "a_wick_le_q1"
+  ]
+ }
+]
