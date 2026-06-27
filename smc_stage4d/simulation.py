@@ -439,8 +439,10 @@ def generate_candidates_from_prepared(prepared):
 
     # ── COMBO UNION: 조합셋 중 "전 원자 True 인 조합"이 하나라도 있으면 True(첫 매칭서 단락) ──
     def _combo_union_match(tags):
-        return any(all(bool(tags.get(_a, False)) for _a in _atoms)
-                   for _atoms in COMBO_UNION_ATOMSETS)
+        # ⭐ 음극(~atom) 지원: "~a_fvg"=NOT a_fvg. 정극으로 잘못 매칭 방지.
+        def _ok(_a):
+            return (not bool(tags.get(_a[1:], False))) if _a.startswith("~") else bool(tags.get(_a, False))
+        return any(all(_ok(_a) for _a in _atoms) for _atoms in COMBO_UNION_ATOMSETS)
 
     # ── ANY_OTHER: "X AND ANY_OTHER" 룰용 — 지정 원자 중 1개라도 True (score_ge13 AND any-other) ──
     _ATOM_ANYOTHER_RAW = [x.strip() for x in _os_h.environ.get("ATOM_ANYOTHER_LIST", "").split(",") if x.strip()]

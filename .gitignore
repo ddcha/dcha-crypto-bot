@@ -56,3 +56,6 @@ part*.log
 union1501_result/
 union257_result/
 union_summary.csv
+
+# prepared 캐시 (대용량, 재생성 가능)
+*.pkl

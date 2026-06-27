@@ -1,0 +1,1858 @@
+[
+ {
+  "key": "a_bb_squeeze",
+  "atoms": [
+   "a_bb_squeeze"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent",
+  "atoms": [
+   "a_bb_squeeze",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_mss+a_ob+a_room",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_mss",
+   "a_ob",
+   "a_room",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_mss+a_ob+a_room+a_score_ge13",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_mss",
+   "a_ob",
+   "a_room",
+   "a_score_ge13",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_mss+a_ob+a_room+a_score_ge13+a_trend_counter",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_mss",
+   "a_ob",
+   "a_room",
+   "a_score_ge13",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_mss+a_ob+a_room+a_score_ge13+a_trend_counter+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_mss",
+   "a_ob",
+   "a_room",
+   "a_score_ge13",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_mss+a_ob+a_room+a_score_ge13+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_mss",
+   "a_ob",
+   "a_room",
+   "a_score_ge13",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_mss+a_ob+a_room+a_score_ge13+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_mss",
+   "a_ob",
+   "a_room",
+   "a_score_ge13",
+   "a_volume",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_mss+a_ob+a_room+a_trend_counter+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_mss",
+   "a_ob",
+   "a_room",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_mss+a_ob+a_score_ge13+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_mss",
+   "a_ob",
+   "a_score_ge13",
+   "a_volume",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_mss+a_room",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_mss",
+   "a_room",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_mss+a_room+a_score_ge13+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_mss",
+   "a_room",
+   "a_score_ge13",
+   "a_volume",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_mss+a_room+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_mss",
+   "a_room",
+   "a_volume",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_ob+a_room+a_score_ge13",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_ob",
+   "a_room",
+   "a_score_ge13",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_ob+a_room+a_score_ge13+a_sweep+a_trend_counter+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_ob",
+   "a_room",
+   "a_score_ge13",
+   "a_sweep",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_ob+a_room+a_score_ge13+a_trend_counter",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_ob",
+   "a_room",
+   "a_score_ge13",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_ob+a_room+a_score_ge13+a_trend_counter+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_ob",
+   "a_room",
+   "a_score_ge13",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_ob+a_room+a_score_ge13+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_ob",
+   "a_room",
+   "a_score_ge13",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_ob+a_room+a_sweep+a_trend_counter",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_ob",
+   "a_room",
+   "a_sweep",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_ob+a_room+a_sweep+a_trend_counter+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_ob",
+   "a_room",
+   "a_sweep",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_ob+a_room+a_trend_counter+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_ob",
+   "a_room",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_ob+a_room+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_ob",
+   "a_room",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_ob+a_score_ge13",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_ob",
+   "a_score_ge13",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_ob+a_score_ge13+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_ob",
+   "a_score_ge13",
+   "a_volume",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_ob+a_trend_counter",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_ob",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_ob+a_trend_counter+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_ob",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_ob+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_ob",
+   "a_volume",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_room",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_room",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_room+a_score_ge13",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_room",
+   "a_score_ge13",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_room+a_score_ge13+a_trend_counter",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_room",
+   "a_score_ge13",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_room+a_score_ge13+a_trend_counter+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_room",
+   "a_score_ge13",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_room+a_score_ge13+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_room",
+   "a_score_ge13",
+   "a_volume",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_room+a_sweep+a_trend_counter",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_room",
+   "a_sweep",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_room+a_sweep+a_trend_counter+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_room",
+   "a_sweep",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_room+a_trend_counter",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_room",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_room+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_room",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_room+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_room",
+   "a_volume",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_trend_counter",
+  "atoms": [
+   "a_bb_squeeze",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_trend_counter+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_fvg_absent+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_volume",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_mss+a_room+a_score_ge13+a_sweep+a_trend_counter+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_mss",
+   "a_room",
+   "a_score_ge13",
+   "a_sweep",
+   "a_volume",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_mss+a_room+a_score_ge13+a_trend_counter",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_mss",
+   "a_room",
+   "a_score_ge13",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_mss+a_room+a_score_ge13+a_trend_counter+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_mss",
+   "a_room",
+   "a_score_ge13",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_mss+a_room+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_mss",
+   "a_room",
+   "a_volume"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_mss+a_score_ge13+a_trend_counter+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_mss",
+   "a_score_ge13",
+   "a_volume",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_mss+a_score_ge13+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_mss",
+   "a_score_ge13",
+   "a_volume"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_mss+a_trend_counter+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_mss",
+   "a_volume",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_room+a_score_ge13+a_sweep+a_trend_counter",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_room",
+   "a_score_ge13",
+   "a_sweep",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_room+a_score_ge13+a_sweep+a_trend_counter+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_room",
+   "a_score_ge13",
+   "a_sweep",
+   "a_volume",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_room+a_score_ge13+a_trend_counter",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_room",
+   "a_score_ge13",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_room+a_score_ge13+a_vol_expansion",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_room",
+   "a_score_ge13",
+   "a_vol_expansion"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_room+a_score_ge13+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_room",
+   "a_score_ge13",
+   "a_vol_expansion",
+   "a_volume"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_room+a_sweep+a_trend_counter",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_room",
+   "a_sweep",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_room+a_sweep+a_trend_counter+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_room",
+   "a_sweep",
+   "a_volume",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_room+a_sweep+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_room",
+   "a_sweep",
+   "a_vol_expansion",
+   "a_volume"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_room+a_trend_counter+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_room",
+   "a_volume",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_room+a_vol_expansion",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_room",
+   "a_vol_expansion"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_score_ge13",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_score_ge13"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_score_ge13+a_trend_counter+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_score_ge13",
+   "a_volume",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_score_ge13+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_score_ge13",
+   "a_volume"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_trend_counter",
+  "atoms": [
+   "a_bb_squeeze",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_trend_counter+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_vol_expansion",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_vol_expansion"
+  ]
+ },
+ {
+  "key": "a_bb_squeeze+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_bb_squeeze",
+   "a_vol_expansion",
+   "a_volume"
+  ]
+ },
+ {
+  "key": "a_fvg_absent",
+  "atoms": [
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_mss+a_ob+a_room+a_score_ge13+a_sweep+a_trend_counter+a_volume",
+  "atoms": [
+   "a_mss",
+   "a_ob",
+   "a_room",
+   "a_score_ge13",
+   "a_sweep",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_mss+a_ob+a_room+a_score_ge13+a_trend_counter+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_mss",
+   "a_ob",
+   "a_room",
+   "a_score_ge13",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_mss+a_ob+a_room+a_score_ge13+a_trend_counter+a_volume",
+  "atoms": [
+   "a_mss",
+   "a_ob",
+   "a_room",
+   "a_score_ge13",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_mss+a_ob+a_room+a_score_ge13+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_mss",
+   "a_ob",
+   "a_room",
+   "a_score_ge13",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_mss+a_ob+a_room+a_score_ge13+a_volume",
+  "atoms": [
+   "a_mss",
+   "a_ob",
+   "a_room",
+   "a_score_ge13",
+   "a_volume",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_mss+a_ob+a_room+a_sweep+a_trend_counter+a_volume",
+  "atoms": [
+   "a_mss",
+   "a_ob",
+   "a_room",
+   "a_sweep",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_mss+a_ob+a_room+a_trend_counter",
+  "atoms": [
+   "a_mss",
+   "a_ob",
+   "a_room",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_mss+a_ob+a_room+a_trend_counter+a_vol_expansion",
+  "atoms": [
+   "a_mss",
+   "a_ob",
+   "a_room",
+   "a_vol_expansion",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_mss+a_ob+a_score_ge13+a_trend_counter+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_mss",
+   "a_ob",
+   "a_score_ge13",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_mss+a_ob+a_score_ge13+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_mss",
+   "a_ob",
+   "a_score_ge13",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_mss+a_ob+a_score_ge13+a_volume",
+  "atoms": [
+   "a_mss",
+   "a_ob",
+   "a_score_ge13",
+   "a_volume",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_mss+a_room+a_score_ge13",
+  "atoms": [
+   "a_mss",
+   "a_room",
+   "a_score_ge13",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_mss+a_room+a_score_ge13+a_sweep+a_trend_counter+a_volume",
+  "atoms": [
+   "a_mss",
+   "a_room",
+   "a_score_ge13",
+   "a_sweep",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_mss+a_room+a_score_ge13+a_trend_counter+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_mss",
+   "a_room",
+   "a_score_ge13",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_mss+a_room+a_score_ge13+a_trend_counter+a_volume",
+  "atoms": [
+   "a_mss",
+   "a_room",
+   "a_score_ge13",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_mss+a_room+a_score_ge13+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_mss",
+   "a_room",
+   "a_score_ge13",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_mss+a_score_ge13+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_mss",
+   "a_score_ge13",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob",
+  "atoms": [
+   "a_ob",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob+a_room",
+  "atoms": [
+   "a_ob",
+   "a_room",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob+a_room+a_score_ge13",
+  "atoms": [
+   "a_ob",
+   "a_room",
+   "a_score_ge13",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob+a_room+a_score_ge13+a_sweep+a_trend_counter+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_ob",
+   "a_room",
+   "a_score_ge13",
+   "a_sweep",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob+a_room+a_score_ge13+a_sweep+a_trend_counter+a_volume",
+  "atoms": [
+   "a_ob",
+   "a_room",
+   "a_score_ge13",
+   "a_sweep",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob+a_room+a_score_ge13+a_sweep+a_vol_expansion",
+  "atoms": [
+   "a_ob",
+   "a_room",
+   "a_score_ge13",
+   "a_sweep",
+   "a_vol_expansion",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob+a_room+a_score_ge13+a_sweep+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_ob",
+   "a_room",
+   "a_score_ge13",
+   "a_sweep",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob+a_room+a_score_ge13+a_trend_counter",
+  "atoms": [
+   "a_ob",
+   "a_room",
+   "a_score_ge13",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob+a_room+a_score_ge13+a_trend_counter+a_vol_expansion",
+  "atoms": [
+   "a_ob",
+   "a_room",
+   "a_score_ge13",
+   "a_vol_expansion",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob+a_room+a_score_ge13+a_trend_counter+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_ob",
+   "a_room",
+   "a_score_ge13",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob+a_room+a_score_ge13+a_vol_expansion",
+  "atoms": [
+   "a_ob",
+   "a_room",
+   "a_score_ge13",
+   "a_vol_expansion",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob+a_room+a_score_ge13+a_volume",
+  "atoms": [
+   "a_ob",
+   "a_room",
+   "a_score_ge13",
+   "a_volume",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob+a_room+a_sweep+a_trend_counter",
+  "atoms": [
+   "a_ob",
+   "a_room",
+   "a_sweep",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob+a_room+a_sweep+a_trend_counter+a_vol_expansion",
+  "atoms": [
+   "a_ob",
+   "a_room",
+   "a_sweep",
+   "a_vol_expansion",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob+a_room+a_sweep+a_trend_counter+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_ob",
+   "a_room",
+   "a_sweep",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob+a_room+a_sweep+a_trend_counter+a_volume",
+  "atoms": [
+   "a_ob",
+   "a_room",
+   "a_sweep",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob+a_room+a_sweep+a_volume",
+  "atoms": [
+   "a_ob",
+   "a_room",
+   "a_sweep",
+   "a_volume",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob+a_room+a_trend_counter",
+  "atoms": [
+   "a_ob",
+   "a_room",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob+a_room+a_trend_counter+a_vol_expansion",
+  "atoms": [
+   "a_ob",
+   "a_room",
+   "a_vol_expansion",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob+a_room+a_trend_counter+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_ob",
+   "a_room",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob+a_room+a_trend_counter+a_volume",
+  "atoms": [
+   "a_ob",
+   "a_room",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob+a_room+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_ob",
+   "a_room",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob+a_score_ge13+a_trend_counter+a_volume",
+  "atoms": [
+   "a_ob",
+   "a_score_ge13",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob+a_score_ge13+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_ob",
+   "a_score_ge13",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob+a_score_ge13+a_volume",
+  "atoms": [
+   "a_ob",
+   "a_score_ge13",
+   "a_volume",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob+a_sweep+a_trend_counter+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_ob",
+   "a_sweep",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob+a_sweep+a_trend_counter+a_volume",
+  "atoms": [
+   "a_ob",
+   "a_sweep",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob+a_trend_counter",
+  "atoms": [
+   "a_ob",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob+a_trend_counter+a_vol_expansion",
+  "atoms": [
+   "a_ob",
+   "a_vol_expansion",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob+a_trend_counter+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_ob",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob+a_trend_counter+a_volume",
+  "atoms": [
+   "a_ob",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_ob+a_volume",
+  "atoms": [
+   "a_ob",
+   "a_volume",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_room",
+  "atoms": [
+   "a_room",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_room+a_score_ge13",
+  "atoms": [
+   "a_room",
+   "a_score_ge13",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_room+a_score_ge13+a_trend_counter",
+  "atoms": [
+   "a_room",
+   "a_score_ge13",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_room+a_score_ge13+a_trend_counter+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_room",
+   "a_score_ge13",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_room+a_score_ge13+a_trend_counter+a_volume",
+  "atoms": [
+   "a_room",
+   "a_score_ge13",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_room+a_score_ge13+a_vol_expansion",
+  "atoms": [
+   "a_room",
+   "a_score_ge13",
+   "a_vol_expansion",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_room+a_score_ge13+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_room",
+   "a_score_ge13",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_room+a_score_ge13+a_volume",
+  "atoms": [
+   "a_room",
+   "a_score_ge13",
+   "a_volume",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_room+a_sweep+a_trend_counter",
+  "atoms": [
+   "a_room",
+   "a_sweep",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_room+a_sweep+a_trend_counter+a_vol_expansion",
+  "atoms": [
+   "a_room",
+   "a_sweep",
+   "a_vol_expansion",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_room+a_sweep+a_trend_counter+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_room",
+   "a_sweep",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_room+a_sweep+a_trend_counter+a_volume",
+  "atoms": [
+   "a_room",
+   "a_sweep",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_room+a_trend_counter+a_vol_expansion",
+  "atoms": [
+   "a_room",
+   "a_vol_expansion",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_room+a_trend_counter+a_volume",
+  "atoms": [
+   "a_room",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_room+a_vol_expansion",
+  "atoms": [
+   "a_room",
+   "a_vol_expansion",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_room+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_room",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_room+a_volume",
+  "atoms": [
+   "a_room",
+   "a_volume",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_score_ge13+a_trend_counter+a_volume",
+  "atoms": [
+   "a_score_ge13",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_sweep+a_trend_counter+a_vol_expansion",
+  "atoms": [
+   "a_sweep",
+   "a_vol_expansion",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_sweep+a_trend_counter+a_volume",
+  "atoms": [
+   "a_sweep",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_trend_counter",
+  "atoms": [
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_trend_counter+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_vol_expansion",
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_trend_counter+a_volume",
+  "atoms": [
+   "a_volume",
+   "~a_fvg",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_vol_expansion",
+  "atoms": [
+   "a_vol_expansion",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_fvg_absent+a_volume",
+  "atoms": [
+   "a_volume",
+   "~a_fvg"
+  ]
+ },
+ {
+  "key": "a_mss+a_room+a_score_ge13+a_sweep+a_trend_counter",
+  "atoms": [
+   "a_mss",
+   "a_room",
+   "a_score_ge13",
+   "a_sweep",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_mss+a_room+a_score_ge13+a_sweep+a_trend_counter+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_mss",
+   "a_room",
+   "a_score_ge13",
+   "a_sweep",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_mss+a_room+a_score_ge13+a_sweep+a_trend_counter+a_volume",
+  "atoms": [
+   "a_mss",
+   "a_room",
+   "a_score_ge13",
+   "a_sweep",
+   "a_volume",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_mss+a_room+a_score_ge13+a_trend_counter+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_mss",
+   "a_room",
+   "a_score_ge13",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_mss+a_room+a_score_ge13+a_volume",
+  "atoms": [
+   "a_mss",
+   "a_room",
+   "a_score_ge13",
+   "a_volume"
+  ]
+ },
+ {
+  "key": "a_mss+a_room+a_trend_counter+a_vol_expansion",
+  "atoms": [
+   "a_mss",
+   "a_room",
+   "a_vol_expansion",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_mss+a_room+a_trend_counter+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_mss",
+   "a_room",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_mss+a_room+a_trend_counter+a_volume",
+  "atoms": [
+   "a_mss",
+   "a_room",
+   "a_volume",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_mss+a_room+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_mss",
+   "a_room",
+   "a_vol_expansion",
+   "a_volume"
+  ]
+ },
+ {
+  "key": "a_mss+a_room+a_volume",
+  "atoms": [
+   "a_mss",
+   "a_room",
+   "a_volume"
+  ]
+ },
+ {
+  "key": "a_mss+a_score_ge13+a_sweep+a_trend_counter+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_mss",
+   "a_score_ge13",
+   "a_sweep",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_mss+a_score_ge13+a_trend_counter",
+  "atoms": [
+   "a_mss",
+   "a_score_ge13",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_mss+a_score_ge13+a_trend_counter+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_mss",
+   "a_score_ge13",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_mss+a_score_ge13+a_trend_counter+a_volume",
+  "atoms": [
+   "a_mss",
+   "a_score_ge13",
+   "a_volume",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_mss+a_score_ge13+a_vol_expansion",
+  "atoms": [
+   "a_mss",
+   "a_score_ge13",
+   "a_vol_expansion"
+  ]
+ },
+ {
+  "key": "a_mss+a_score_ge13+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_mss",
+   "a_score_ge13",
+   "a_vol_expansion",
+   "a_volume"
+  ]
+ },
+ {
+  "key": "a_mss+a_score_ge13+a_volume",
+  "atoms": [
+   "a_mss",
+   "a_score_ge13",
+   "a_volume"
+  ]
+ },
+ {
+  "key": "a_mss+a_trend_counter",
+  "atoms": [
+   "a_mss",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_mss+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_mss",
+   "a_vol_expansion",
+   "a_volume"
+  ]
+ },
+ {
+  "key": "a_mss+a_volume",
+  "atoms": [
+   "a_mss",
+   "a_volume"
+  ]
+ },
+ {
+  "key": "a_room",
+  "atoms": [
+   "a_room"
+  ]
+ },
+ {
+  "key": "a_room+a_score_ge13",
+  "atoms": [
+   "a_room",
+   "a_score_ge13"
+  ]
+ },
+ {
+  "key": "a_room+a_score_ge13+a_sweep+a_trend_counter",
+  "atoms": [
+   "a_room",
+   "a_score_ge13",
+   "a_sweep",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_room+a_score_ge13+a_sweep+a_trend_counter+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_room",
+   "a_score_ge13",
+   "a_sweep",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_room+a_score_ge13+a_sweep+a_trend_counter+a_volume",
+  "atoms": [
+   "a_room",
+   "a_score_ge13",
+   "a_sweep",
+   "a_volume",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_room+a_score_ge13+a_sweep+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_room",
+   "a_score_ge13",
+   "a_sweep",
+   "a_vol_expansion",
+   "a_volume"
+  ]
+ },
+ {
+  "key": "a_room+a_score_ge13+a_trend_counter",
+  "atoms": [
+   "a_room",
+   "a_score_ge13",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_room+a_score_ge13+a_trend_counter+a_vol_expansion",
+  "atoms": [
+   "a_room",
+   "a_score_ge13",
+   "a_vol_expansion",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_room+a_score_ge13+a_trend_counter+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_room",
+   "a_score_ge13",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_room+a_score_ge13+a_trend_counter+a_volume",
+  "atoms": [
+   "a_room",
+   "a_score_ge13",
+   "a_volume",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_room+a_score_ge13+a_vol_expansion",
+  "atoms": [
+   "a_room",
+   "a_score_ge13",
+   "a_vol_expansion"
+  ]
+ },
+ {
+  "key": "a_room+a_score_ge13+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_room",
+   "a_score_ge13",
+   "a_vol_expansion",
+   "a_volume"
+  ]
+ },
+ {
+  "key": "a_room+a_score_ge13+a_volume",
+  "atoms": [
+   "a_room",
+   "a_score_ge13",
+   "a_volume"
+  ]
+ },
+ {
+  "key": "a_room+a_sweep",
+  "atoms": [
+   "a_room",
+   "a_sweep"
+  ]
+ },
+ {
+  "key": "a_room+a_sweep+a_trend_counter",
+  "atoms": [
+   "a_room",
+   "a_sweep",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_room+a_sweep+a_trend_counter+a_vol_expansion",
+  "atoms": [
+   "a_room",
+   "a_sweep",
+   "a_vol_expansion",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_room+a_sweep+a_trend_counter+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_room",
+   "a_sweep",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_room+a_sweep+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_room",
+   "a_sweep",
+   "a_vol_expansion",
+   "a_volume"
+  ]
+ },
+ {
+  "key": "a_room+a_sweep+a_volume",
+  "atoms": [
+   "a_room",
+   "a_sweep",
+   "a_volume"
+  ]
+ },
+ {
+  "key": "a_room+a_trend_counter+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_room",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_room+a_vol_expansion",
+  "atoms": [
+   "a_room",
+   "a_vol_expansion"
+  ]
+ },
+ {
+  "key": "a_room+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_room",
+   "a_vol_expansion",
+   "a_volume"
+  ]
+ },
+ {
+  "key": "a_score_ge13+a_trend_counter",
+  "atoms": [
+   "a_score_ge13",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_score_ge13+a_trend_counter+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_score_ge13",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_score_ge13+a_trend_counter+a_volume",
+  "atoms": [
+   "a_score_ge13",
+   "a_volume",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_score_ge13+a_vol_expansion",
+  "atoms": [
+   "a_score_ge13",
+   "a_vol_expansion"
+  ]
+ },
+ {
+  "key": "a_score_ge13+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_score_ge13",
+   "a_vol_expansion",
+   "a_volume"
+  ]
+ },
+ {
+  "key": "a_score_ge13+a_volume",
+  "atoms": [
+   "a_score_ge13",
+   "a_volume"
+  ]
+ },
+ {
+  "key": "a_sweep+a_trend_counter",
+  "atoms": [
+   "a_sweep",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_sweep+a_trend_counter+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_sweep",
+   "a_vol_expansion",
+   "a_volume",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_sweep+a_trend_counter+a_volume",
+  "atoms": [
+   "a_sweep",
+   "a_volume",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_trend_counter",
+  "atoms": [
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_trend_counter+a_vol_expansion",
+  "atoms": [
+   "a_vol_expansion",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_trend_counter+a_vol_expansion+a_volume",
+  "atoms": [
+   "a_vol_expansion",
+   "a_volume",
+   "~a_trend_align"
+  ]
+ },
+ {
+  "key": "a_vol_expansion",
+  "atoms": [
+   "a_vol_expansion"
+  ]
+ },
+ {
+  "key": "a_vol_expansion+a_volume",
+  "atoms": [
+   "a_vol_expansion",
+   "a_volume"
+  ]
+ },
+ {
+  "key": "a_volume",
+  "atoms": [
+   "a_volume"
+  ]
+ }
+]

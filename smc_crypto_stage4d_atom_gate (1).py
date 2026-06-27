@@ -790,17 +790,21 @@ def compute_trade_tags(df_struct, entry_idx, zone_created_idx,
     else:
         tags["a_fvg"] = bool(_fvg_present)   # atr 없으면 존재만으로 (broad)
 
-    # a_room — ⭐broad: 타겟까지 거리 ≥ BROAD_ROOM_RR_MIN·ATR (risk≈1ATR SL 근사)
-    #   기존: risk=atr*0.08(자의적), RR≥2.8. → risk=ATR, room≥1.5·ATR(broad).
+    # a_room — ⭐swing60: 타겟=최근60봉 swing high/low (pd_high/low 1620봉극값 결함 교체).
+    #   거리/ATR ≥ BROAD_ROOM_RR_MIN. 실측 swing60≥1.5: OOS 1.07→1.11·매년삶 ✗→✅·MDD 개선.
+    #   룩어헤드 0: high/low[entry_idx-60 .. entry_idx] = entry_idx(정직신호봉 i-1) 이하만 참조.
     a_room = False
     if pd.notna(atr_val) and atr_val > 0:
         zone_mid = (zone_high + zone_low) / 2.0
+        _ei = int(entry_idx); _s0 = max(0, _ei - 60)
         if side == "long":
-            tgt = df_struct.loc[entry_idx, "pd_high"] if "pd_high" in df_struct.columns else np.nan
+            _seg = df_struct["high"].values[_s0:_ei + 1]
+            tgt = float(np.nanmax(_seg)) if len(_seg) else np.nan
             if pd.notna(tgt):
                 a_room = (max(tgt - zone_mid, 0.0) / atr_val) >= BROAD_ROOM_RR_MIN
         else:
-            tgt = df_struct.loc[entry_idx, "pd_low"] if "pd_low" in df_struct.columns else np.nan
+            _seg = df_struct["low"].values[_s0:_ei + 1]
+            tgt = float(np.nanmin(_seg)) if len(_seg) else np.nan
             if pd.notna(tgt):
                 a_room = (max(zone_mid - tgt, 0.0) / atr_val) >= BROAD_ROOM_RR_MIN
     tags["a_room"] = bool(a_room)
