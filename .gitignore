@@ -59,3 +59,11 @@ union_summary.csv
 
 # prepared 캐시 (대용량, 재생성 가능)
 *.pkl
+
+# live_trading 백업(대용량 로그·venv·바이너리) — 커밋 제외
+live_trading/files/
+live_trading/files.zip
+live_trading/files1/
+live_trading/files1.zip
+live_trading/live_v4/live_v4.log
+live_trading/live_v4/KILL
