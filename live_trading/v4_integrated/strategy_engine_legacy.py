@@ -183,14 +183,12 @@ def apply_basic_indicators(data: pd.DataFrame) -> pd.DataFrame:
     data["ema50"] = data["close"].ewm(span=50, adjust=False).mean()
     data["ema200"] = data["close"].ewm(span=200, adjust=False).mean()
 
-    def get_trend(row: pd.Series) -> str:
-        if row["ema20"] < row["ema50"] < row["ema200"]:
-            return "down"
-        if row["ema20"] > row["ema50"] > row["ema200"]:
-            return "up"
-        return "neutral"
-
-    data["trend"] = data.apply(get_trend, axis=1)
+    # ⭐ numpy화(2026-07): row-wise apply → 벡터마스크 (결과 동일)
+    e20 = data["ema20"].to_numpy(); e50 = data["ema50"].to_numpy(); e200 = data["ema200"].to_numpy()
+    _trend = np.full(len(data), "neutral", dtype=object)
+    _trend[(e20 < e50) & (e50 < e200)] = "down"
+    _trend[(e20 > e50) & (e50 > e200)] = "up"
+    data["trend"] = _trend
     data["range"] = data["high"] - data["low"]
     data["body"] = (data["close"] - data["open"]).abs()
     data["body_ratio"] = np.where(data["range"] > 0, data["body"] / data["range"], 0.0)
@@ -205,48 +203,33 @@ def apply_basic_indicators(data: pd.DataFrame) -> pd.DataFrame:
 
 
 def apply_mss(data: pd.DataFrame, mss_lookback: int = 8) -> pd.DataFrame:
+    # ⭐ numpy화(2026-07): .loc 루프 → rolling.shift 벡터화
     data = data.copy()
-    data["bull_mss"] = False
-    data["bear_mss"] = False
-
-    for i in range(mss_lookback, len(data)):
-        prev_high = data["high"].iloc[i - mss_lookback:i].max()
-        prev_low = data["low"].iloc[i - mss_lookback:i].min()
-
-        if data.loc[i, "close"] > prev_high:
-            data.loc[i, "bull_mss"] = True
-        if data.loc[i, "close"] < prev_low:
-            data.loc[i, "bear_mss"] = True
-
+    n = len(data)
+    close = data["close"].to_numpy()
+    prev_high = data["high"].rolling(mss_lookback).max().shift(1).to_numpy()
+    prev_low = data["low"].rolling(mss_lookback).min().shift(1).to_numpy()
+    valid = np.arange(n) >= mss_lookback
+    data["bull_mss"] = valid & (close > prev_high)
+    data["bear_mss"] = valid & (close < prev_low)
     return data
 
 
 def apply_displacement(data: pd.DataFrame, disp_body_ratio: float = 0.45, disp_atr_mult: float = 0.90) -> pd.DataFrame:
+    # ⭐ numpy화(2026-07): .loc 루프 → 전배열 마스크 (i=0 은 valid False 로 배제)
     data = data.copy()
-    data["bull_disp"] = False
-    data["bear_disp"] = False
-    data["disp_strength"] = 0.0
-
-    for i in range(1, len(data)):
-        atr_val = data.loc[i, "atr"]
-        if pd.isna(atr_val) or atr_val == 0:
-            continue
-
-        bull = (
-            data.loc[i, "close"] > data.loc[i, "open"]
-            and data.loc[i, "body_ratio"] >= disp_body_ratio
-            and data.loc[i, "range"] >= atr_val * disp_atr_mult
-        )
-        bear = (
-            data.loc[i, "close"] < data.loc[i, "open"]
-            and data.loc[i, "body_ratio"] >= disp_body_ratio
-            and data.loc[i, "range"] >= atr_val * disp_atr_mult
-        )
-
-        data.loc[i, "bull_disp"] = bull
-        data.loc[i, "bear_disp"] = bear
-        data.loc[i, "disp_strength"] = data.loc[i, "range"] / atr_val
-
+    n = len(data)
+    atr = data["atr"].to_numpy()
+    close = data["close"].to_numpy(); open_ = data["open"].to_numpy()
+    br = data["body_ratio"].to_numpy(); rng = data["range"].to_numpy()
+    valid = (~np.isnan(atr)) & (atr != 0)
+    valid[0] = False
+    thr = atr * disp_atr_mult
+    data["bull_disp"] = valid & (close > open_) & (br >= disp_body_ratio) & (rng >= thr)
+    data["bear_disp"] = valid & (close < open_) & (br >= disp_body_ratio) & (rng >= thr)
+    ds = np.zeros(n, dtype=float)
+    np.divide(rng, atr, out=ds, where=valid)
+    data["disp_strength"] = ds
     return data
 
 
@@ -259,17 +242,19 @@ def apply_fvg(data: pd.DataFrame) -> pd.DataFrame:
     data["bull_fvg_size"] = np.nan
     data["bear_fvg_size"] = np.nan
 
-    for i in range(2, len(data)):
-        if data.loc[i, "low"] > data.loc[i - 2, "high"]:
-            data.loc[i, "bull_fvg_low"] = data.loc[i - 2, "high"]
-            data.loc[i, "bull_fvg_high"] = data.loc[i, "low"]
-            data.loc[i, "bull_fvg_size"] = data.loc[i, "low"] - data.loc[i - 2, "high"]
-
-        if data.loc[i, "high"] < data.loc[i - 2, "low"]:
-            data.loc[i, "bear_fvg_low"] = data.loc[i, "high"]
-            data.loc[i, "bear_fvg_high"] = data.loc[i - 2, "low"]
-            data.loc[i, "bear_fvg_size"] = data.loc[i - 2, "low"] - data.loc[i, "high"]
-
+    # ⭐ numpy화(2026-07): .loc 루프 → shift2 마스크 (h2[i]=high[i-2], l2[i]=low[i-2])
+    n = len(data)
+    high = data["high"].to_numpy(); low = data["low"].to_numpy()
+    h2 = np.full(n, np.nan); l2 = np.full(n, np.nan)
+    if n > 2:
+        h2[2:] = high[:-2]; l2[2:] = low[:-2]
+    bull = low > h2; bear = high < l2
+    data["bull_fvg_low"] = np.where(bull, h2, np.nan)
+    data["bull_fvg_high"] = np.where(bull, low, np.nan)
+    data["bull_fvg_size"] = np.where(bull, low - h2, np.nan)
+    data["bear_fvg_low"] = np.where(bear, high, np.nan)
+    data["bear_fvg_high"] = np.where(bear, l2, np.nan)
+    data["bear_fvg_size"] = np.where(bear, l2 - high, np.nan)
     return data
 
 
@@ -284,24 +269,26 @@ def apply_ob(data: pd.DataFrame, ob_lookback: int = 8) -> pd.DataFrame:
     data["bull_ob_source_idx"] = np.nan
     data["bear_ob_source_idx"] = np.nan
 
-    for i in range(2, len(data)):
-        if data.loc[i, "bull_disp"]:
+    # ⭐ numpy화(2026-07): 출력 8배열 누적 후 일괄 대입. 내부 역방향 탐색(제어흐름)은 보존, write만 arr화.
+    n = len(data)
+    _o = data["open"].to_numpy(); _c = data["close"].to_numpy()
+    _hh = data["high"].to_numpy(); _ll = data["low"].to_numpy()
+    _bull_disp = data["bull_disp"].to_numpy(); _bear_disp = data["bear_disp"].to_numpy()
+    ulo = np.full(n, np.nan); uhi = np.full(n, np.nan); usz = np.full(n, np.nan); usi = np.full(n, np.nan)
+    elo = np.full(n, np.nan); ehi = np.full(n, np.nan); esz = np.full(n, np.nan); esi = np.full(n, np.nan)
+    for i in range(2, n):
+        if _bull_disp[i]:
             for j in range(i - 1, max(i - ob_lookback - 1, -1), -1):
-                if data.loc[j, "close"] < data.loc[j, "open"]:
-                    data.loc[i, "bull_ob_low"] = data.loc[j, "low"]
-                    data.loc[i, "bull_ob_high"] = data.loc[j, "high"]
-                    data.loc[i, "bull_ob_size"] = data.loc[j, "high"] - data.loc[j, "low"]
-                    data.loc[i, "bull_ob_source_idx"] = j
+                if _c[j] < _o[j]:
+                    ulo[i] = _ll[j]; uhi[i] = _hh[j]; usz[i] = _hh[j] - _ll[j]; usi[i] = j
                     break
-
-        if data.loc[i, "bear_disp"]:
+        if _bear_disp[i]:
             for j in range(i - 1, max(i - ob_lookback - 1, -1), -1):
-                if data.loc[j, "close"] > data.loc[j, "open"]:
-                    data.loc[i, "bear_ob_low"] = data.loc[j, "low"]
-                    data.loc[i, "bear_ob_high"] = data.loc[j, "high"]
-                    data.loc[i, "bear_ob_size"] = data.loc[j, "high"] - data.loc[j, "low"]
-                    data.loc[i, "bear_ob_source_idx"] = j
+                if _c[j] > _o[j]:
+                    elo[i] = _ll[j]; ehi[i] = _hh[j]; esz[i] = _hh[j] - _ll[j]; esi[i] = j
                     break
+    data["bull_ob_low"] = ulo; data["bull_ob_high"] = uhi; data["bull_ob_size"] = usz; data["bull_ob_source_idx"] = usi
+    data["bear_ob_low"] = elo; data["bear_ob_high"] = ehi; data["bear_ob_size"] = esz; data["bear_ob_source_idx"] = esi
     return data
 
 
@@ -315,61 +302,49 @@ def apply_pd(data: pd.DataFrame, pd_lookback: int = 40) -> pd.DataFrame:
 
 
 def apply_pivots(data: pd.DataFrame, swing_len: int = 3) -> pd.DataFrame:
+    # ⭐ numpy화(2026-07): 피벗검출=중심롤링 벡터화, last/prev 추적=배열 순차루프.
+    #   ※ legacy 는 추적 시 pivot 을 index i 에서 즉시 읽음(smc_stage4d 의 i-swing_len 아님) — 동작 그대로 보존.
     data = data.copy()
-    data["pivot_high"] = np.nan
-    data["pivot_low"] = np.nan
+    n = len(data)
+    high = data["high"].to_numpy(); low = data["low"].to_numpy()
+    win = 2 * swing_len + 1
+    rmax = data["high"].rolling(win, center=True).max().to_numpy()
+    rmin = data["low"].rolling(win, center=True).min().to_numpy()
+    piv_h = np.where(high == rmax, high, np.nan)
+    piv_l = np.where(low == rmin, low, np.nan)
+    data["pivot_high"] = piv_h
+    data["pivot_low"] = piv_l
 
-    for i in range(swing_len, len(data) - swing_len):
-        if data.loc[i, "high"] == data["high"].iloc[i - swing_len:i + swing_len + 1].max():
-            data.loc[i, "pivot_high"] = data.loc[i, "high"]
-        if data.loc[i, "low"] == data["low"].iloc[i - swing_len:i + swing_len + 1].min():
-            data.loc[i, "pivot_low"] = data.loc[i, "low"]
-
-    last_high = np.nan
-    last_low = np.nan
-    prev_high = np.nan
-    prev_low = np.nan
-
-    data["last_pivot_high"] = np.nan
-    data["prev_pivot_high"] = np.nan
-    data["last_pivot_low"] = np.nan
-    data["prev_pivot_low"] = np.nan
-
-    for i in range(len(data)):
-        if pd.notna(data.loc[i, "pivot_high"]):
-            prev_high = last_high
-            last_high = data.loc[i, "pivot_high"]
-        if pd.notna(data.loc[i, "pivot_low"]):
-            prev_low = last_low
-            last_low = data.loc[i, "pivot_low"]
-
-        data.loc[i, "last_pivot_high"] = last_high
-        data.loc[i, "prev_pivot_high"] = prev_high
-        data.loc[i, "last_pivot_low"] = last_low
-        data.loc[i, "prev_pivot_low"] = prev_low
-
+    last_high = np.nan; last_low = np.nan; prev_high = np.nan; prev_low = np.nan
+    lph = np.empty(n); pph = np.empty(n); lpl = np.empty(n); ppl = np.empty(n)
+    for i in range(n):
+        if not np.isnan(piv_h[i]):
+            prev_high = last_high; last_high = piv_h[i]
+        if not np.isnan(piv_l[i]):
+            prev_low = last_low; last_low = piv_l[i]
+        lph[i] = last_high; pph[i] = prev_high; lpl[i] = last_low; ppl[i] = prev_low
+    data["last_pivot_high"] = lph; data["prev_pivot_high"] = pph
+    data["last_pivot_low"] = lpl; data["prev_pivot_low"] = ppl
     return data
 
 
 def apply_structure_bias(data: pd.DataFrame) -> pd.DataFrame:
+    # ⭐ numpy화(2026-07): 순차 상태머신 배열 루프
     data = data.copy()
-    data["structure_bias"] = "neutral"
-
+    n = len(data)
+    lph = data["last_pivot_high"].to_numpy(); pph = data["prev_pivot_high"].to_numpy()
+    lpl = data["last_pivot_low"].to_numpy(); ppl = data["prev_pivot_low"].to_numpy()
+    out = np.empty(n, dtype=object)
     current_bias = "neutral"
-    for i in range(len(data)):
-        lph = data.loc[i, "last_pivot_high"]
-        pph = data.loc[i, "prev_pivot_high"]
-        lpl = data.loc[i, "last_pivot_low"]
-        ppl = data.loc[i, "prev_pivot_low"]
-
-        if pd.notna(lph) and pd.notna(pph) and pd.notna(lpl) and pd.notna(ppl):
-            if lph > pph and lpl > ppl:
+    for i in range(n):
+        a, b, c, d = lph[i], pph[i], lpl[i], ppl[i]
+        if not (np.isnan(a) or np.isnan(b) or np.isnan(c) or np.isnan(d)):
+            if a > b and c > d:
                 current_bias = "up"
-            elif lph < pph and lpl < ppl:
+            elif a < b and c < d:
                 current_bias = "down"
-
-        data.loc[i, "structure_bias"] = current_bias
-
+        out[i] = current_bias
+    data["structure_bias"] = out
     return data
 
 
@@ -380,46 +355,43 @@ def apply_choch(data: pd.DataFrame, break_atr_mult: float = 0.15) -> pd.DataFram
     data["bull_choch_level"] = np.nan
     data["bear_choch_level"] = np.nan
 
-    for i in range(1, len(data)):
-        atr_val = data.loc[i, "atr"] if pd.notna(data.loc[i, "atr"]) else np.nan
-        if pd.isna(atr_val) or atr_val <= 0:
+    # ⭐ numpy화(2026-07): 배열 루프 (i, i-1 참조) — level 컬럼 포함 동작 보존
+    n = len(data)
+    atr = data["atr"].to_numpy(); close = data["close"].to_numpy()
+    bias_arr = data["structure_bias"].to_numpy()
+    lh_arr = data["last_pivot_high"].to_numpy(); ll_arr = data["last_pivot_low"].to_numpy()
+    bull = np.zeros(n, dtype=bool); bear = np.zeros(n, dtype=bool)
+    bull_lv = np.full(n, np.nan); bear_lv = np.full(n, np.nan)
+    for i in range(1, n):
+        atr_val = atr[i]
+        if np.isnan(atr_val) or atr_val <= 0:
             continue
-
-        bias = data.loc[i - 1, "structure_bias"]
-        last_high = data.loc[i - 1, "last_pivot_high"]
-        last_low = data.loc[i - 1, "last_pivot_low"]
-
-        if bias == "down" and pd.notna(last_high):
-            if data.loc[i, "close"] > (last_high + atr_val * break_atr_mult):
-                data.loc[i, "bull_choch"] = True
-                data.loc[i, "bull_choch_level"] = last_high
-
-        if bias == "up" and pd.notna(last_low):
-            if data.loc[i, "close"] < (last_low - atr_val * break_atr_mult):
-                data.loc[i, "bear_choch"] = True
-                data.loc[i, "bear_choch_level"] = last_low
-
+        bias = bias_arr[i - 1]; last_high = lh_arr[i - 1]; last_low = ll_arr[i - 1]
+        if bias == "down" and not np.isnan(last_high):
+            if close[i] > (last_high + atr_val * break_atr_mult):
+                bull[i] = True; bull_lv[i] = last_high
+        if bias == "up" and not np.isnan(last_low):
+            if close[i] < (last_low - atr_val * break_atr_mult):
+                bear[i] = True; bear_lv[i] = last_low
+    data["bull_choch"] = bull; data["bear_choch"] = bear
+    data["bull_choch_level"] = bull_lv; data["bear_choch_level"] = bear_lv
     return data
 
 
 def apply_h4_market_state(data: pd.DataFrame, transition_bars: int = 8) -> pd.DataFrame:
+    # ⭐ numpy화(2026-07): 순차 상태머신 배열 루프
     data = data.copy()
-    data["market_state"] = "neutral"
-
-    bull_until = -1
-    bear_until = -1
-
-    for i in range(len(data)):
-        if data.loc[i, "bull_choch"]:
-            bull_until = i + transition_bars
-            bear_until = -1
-
-        if data.loc[i, "bear_choch"]:
-            bear_until = i + transition_bars
-            bull_until = -1
-
-        base_trend = data.loc[i, "trend"]
-
+    n = len(data)
+    bull_choch = data["bull_choch"].to_numpy(); bear_choch = data["bear_choch"].to_numpy()
+    trend = data["trend"].to_numpy()
+    out = np.empty(n, dtype=object)
+    bull_until = -1; bear_until = -1
+    for i in range(n):
+        if bull_choch[i]:
+            bull_until = i + transition_bars; bear_until = -1
+        if bear_choch[i]:
+            bear_until = i + transition_bars; bull_until = -1
+        base_trend = trend[i]
         if bull_until >= i and base_trend != "up":
             state = "bull_transition"
         elif bear_until >= i and base_trend != "down":
@@ -431,9 +403,8 @@ def apply_h4_market_state(data: pd.DataFrame, transition_bars: int = 8) -> pd.Da
                 state = "down"
             else:
                 state = "neutral"
-
-        data.loc[i, "market_state"] = state
-
+        out[i] = state
+    data["market_state"] = out
     return data
 
 
@@ -452,27 +423,20 @@ def apply_wave_state(data: pd.DataFrame) -> pd.DataFrame:
 
     [선결] last_pivot_high, prev_pivot_high, last_pivot_low, prev_pivot_low 가 있어야 함.
     """
+    # ⭐ numpy화(2026-07): 전배열 마스크 (elif 우선순위 = 역순 대입으로 재현)
     data = data.copy()
-    data["wave_state"] = "unclear"
-    for i in range(len(data)):
-        lph = data.loc[i, "last_pivot_high"]
-        pph = data.loc[i, "prev_pivot_high"]
-        lpl = data.loc[i, "last_pivot_low"]
-        ppl = data.loc[i, "prev_pivot_low"]
-        if pd.isna(lph) or pd.isna(pph) or pd.isna(lpl) or pd.isna(ppl):
-            continue
-        is_HH = lph > pph
-        is_LH = lph < pph
-        is_HL = lpl > ppl
-        is_LL = lpl < ppl
-        if is_HH and is_HL:
-            data.loc[i, "wave_state"] = "impulse_up"
-        elif is_LL and is_LH:
-            data.loc[i, "wave_state"] = "impulse_down"
-        elif is_HH and is_LL:
-            data.loc[i, "wave_state"] = "expansion"
-        elif is_LH and is_HL:
-            data.loc[i, "wave_state"] = "compression"
+    n = len(data)
+    lph = data["last_pivot_high"].to_numpy(); pph = data["prev_pivot_high"].to_numpy()
+    lpl = data["last_pivot_low"].to_numpy(); ppl = data["prev_pivot_low"].to_numpy()
+    ok = ~(np.isnan(lph) | np.isnan(pph) | np.isnan(lpl) | np.isnan(ppl))
+    is_HH = lph > pph; is_LH = lph < pph; is_HL = lpl > ppl; is_LL = lpl < ppl
+    out = np.full(n, "unclear", dtype=object)
+    # 원본 if/elif 순서의 역순으로 대입 → 앞선 조건이 최종 우선
+    out[ok & is_LH & is_HL] = "compression"
+    out[ok & is_HH & is_LL] = "expansion"
+    out[ok & is_LL & is_LH] = "impulse_down"
+    out[ok & is_HH & is_HL] = "impulse_up"
+    data["wave_state"] = out
     return data
 
 
