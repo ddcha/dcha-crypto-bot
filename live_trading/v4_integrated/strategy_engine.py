@@ -158,7 +158,7 @@ def generate_entry_signal(df_h4_raw, df_h1_raw, balance, risk_pct, fee_rate, max
     if base_risk <= 0:
         return {"should_enter": False, "reason": "combo_removed_or_zero", "setup": setup}
     rm = float(risk_multiplier) if risk_multiplier and float(risk_multiplier) > 0 else 1.0
-    final_risk = min(base_risk, _HARD_MAX_RISK_PCT) * rm     # ★소표본 하드캡 + 패널 배수
+    final_risk = min(base_risk * rm, _HARD_MAX_RISK_PCT)     # ★rm 적용 후 하드캡(15%)이 최종 상한 — rm 우회 차단(감사 #2)
     qty, notional, _ = calc_position_size(balance, final_risk, ent, sl, fee_rate, max_notional_mult)
     if qty is None or qty <= 0:
         return {"should_enter": False, "reason": "position_size_zero", "setup": setup, "risk_pct": final_risk}
