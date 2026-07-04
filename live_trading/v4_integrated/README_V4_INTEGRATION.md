@@ -16,9 +16,15 @@
 | `smc_stage4d/`, `setups_btc_triple_a3v4.json`, `combo_risk_table.json` | ★신규 — v4 엔진·규칙·risk테이블 |
 | main 포지션관리/control_panel/exchange_bybit/state_store/... | **변경 없음(그대로 재사용)** |
 
-## 확정 전략 (strategy_engine.py 내장)
-- v4 42규칙 3중게이트(atoms×btc_zone×side) + **만기컷(≤48h) + 24·25제거 + 전역 risk×1.2 + killer 3.5%캡 + 소표본 하드캡 2%**
-- 백테스트: 68.69억 / MDD −17.68% / PF 2.012 / 은퇴 2024-01.
+## ★ 확정 기준 조건 (2026-07-04, 재조정 분석 완료)
+v4 42규칙 3중게이트 + 다음 기준으로 확정 (`../../reconcile_result/` 참조):
+- **트레일링 = 백테 엔진 트레일** (직전봉 range중점−0.10×H4ATR) — main.py `calc_backtest_trail_stop`, `config.TRAIL_MODE="backtest"`. 구 R래칫 대비 MDD −17.75% vs −27% 우위. (롤백: TRAIL_MODE="rratchet")
+- **리스크캡 15%** (`_HARD_MAX_RISK_PCT=15.0`) — 120% 소표본 3조합만 실효 타깃. MC상 파산 0%.
+- **만기컷 36h** (`_EXPIRY_BLOCK_HOURS=36`)
+- 24·25제거 + 전역 risk×1.2 + killer 3.5%캡 + 8h 양방향 쿨다운 + 구조적 SL 1.0x + notional 3배 + 15m fill 검증
+- **백테스트: 62.52억 / MDD −17.75% / PF 2.010 / 은퇴 2024-01** (`reconcile_result/cap15_expiry36h_v2/`)
+
+### 이전값(참고): 만기 48h·캡 2%·R래칫 = 13.83억/−26.35% → 기준조건으로 4.5배 자본·8.6%p MDD 개선.
 
 ## 룩어헤드 free 보장
 백테스트 candidate 생성은 진입 후 미래봉 시뮬 필요 → 라이브 현재봉은 미래봉 없음.

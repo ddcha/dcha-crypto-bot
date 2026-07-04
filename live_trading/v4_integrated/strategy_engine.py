@@ -23,7 +23,7 @@ from strategy_engine_legacy import (
 
 # ── 확정 v4 파라미터 ──
 _ENGINE_ENV = {"OB_MODE": "engulf", "DISP_ATR_MULT": "1.3", "USE_H1_REFINE": "1", "HONEST_STAGE": "5", "MIN_SCORE": "7.5"}
-_G = 1.2; _EXPIRY_BLOCK_HOURS = 48; _HARD_MAX_RISK_PCT = 2.0
+_G = 1.2; _EXPIRY_BLOCK_HOURS = 36; _HARD_MAX_RISK_PCT = 15.0   # ★기준조건(2026-07-04): 만기 48→36h, 캡 2→15%(120% 3조합만 실효 타깃)
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _RULES = None; _ATOMSETS = None; _RISK = None; _ORIG = None; _READY = False
 _BTS = None; _BDIST = None; _LAST_TAGS = {}

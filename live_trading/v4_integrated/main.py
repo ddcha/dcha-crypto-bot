@@ -6,6 +6,7 @@ import math
 import time
 from datetime import datetime, timezone
 from dotenv import load_dotenv
+import pandas as pd
 
 from config import (
     CATEGORY,
@@ -17,6 +18,7 @@ from config import (
     FEE_RATE,
     LOOP_SLEEP_SECONDS,
     EXIT_COOLDOWN_HOURS,
+    TRAIL_MODE,
     # v2.2: Zone-Proximity Trigger
     USE_ZONE_PROXIMITY_TRIGGER,
     LIGHT_LOOP_SLEEP_SECONDS,
@@ -921,6 +923,38 @@ def calc_trailing_stop_price(
     if side == "Buy":
         return entry_price + risk_per_unit * lock_rr
     return entry_price - risk_per_unit * lock_rr
+
+
+def calc_backtest_trail_stop(
+    side: str,
+    entry_price: float,
+    prev_high: float,
+    prev_low: float,
+    atr_val: float,
+) -> float | None:
+    """★백테 엔진 트레일 이식 (smc_stage4d.simulation.update_trailing_stop 동일 공식).
+    직전 마감 H4봉의 range 중점 ∓ 0.10×H4ATR, entry 로 클램프(BE 이하로 안 내려감).
+    단조성(현 stop 대비 유리할 때만)은 호출부 _meaningful_improve 가 처리.
+    """
+    if prev_high is None or prev_low is None or atr_val is None:
+        return None
+    prev_range = float(prev_high) - float(prev_low)
+    a = float(atr_val) if atr_val == atr_val else 0.0   # NaN 방어
+    if side == "Buy":
+        candidate = float(prev_low) + prev_range * 0.50 - a * 0.10
+        return max(candidate, float(entry_price))
+    candidate = float(prev_high) - prev_range * 0.50 + a * 0.10
+    return min(candidate, float(entry_price))
+
+
+def _last_closed_h4_for_trail(exchange, category: str, symbol: str):
+    """트레일용 직전 마감 H4봉 (high, low, ATR14). 신호경로와 동일하게 fetch 마지막 봉=마감봉으로 취급."""
+    df = exchange.get_recent_klines_df(category=category, symbol=symbol, interval=H4_INTERVAL, limit=H4_LIMIT)
+    h = df["high"].astype(float); l = df["low"].astype(float); c = df["close"].astype(float)
+    pc = c.shift(1)
+    tr = pd.concat([h - l, (h - pc).abs(), (l - pc).abs()], axis=1).max(axis=1)
+    atr = tr.rolling(14).mean().iloc[-1]
+    return float(h.iloc[-1]), float(l.iloc[-1]), float(atr)
 
 
 def parse_iso_utc(ts: str | None) -> datetime | None:
@@ -1994,14 +2028,24 @@ def manage_open_positions(
             )
 
         if mp.get("runner_active", False):
-            trailing_stop = calc_trailing_stop_price(
-                side=side,
-                entry_price=entry_price,
-                risk_per_unit=risk_per_unit,
-                rr=rr,
-                protection=protection,
-                trail_activate_rr=trail_activate_rr,
-            )
+            # ★기준조건(2026-07-04): 트레일링 = 백테 엔진 트레일(직전봉 range중점−0.10×H4ATR).
+            #   TRAIL_MODE="rratchet" 로 두면 구 R래칫 사용(롤백용).
+            if TRAIL_MODE == "backtest":
+                try:
+                    _ph, _pl, _atr = _last_closed_h4_for_trail(exchange, category, symbol)
+                    trailing_stop = calc_backtest_trail_stop(side, entry_price, _ph, _pl, _atr)
+                except Exception as _te:
+                    trailing_stop = None
+                    print(f"[trail/backtest] {symbol} H4 fetch/calc fail: {_te}")
+            else:
+                trailing_stop = calc_trailing_stop_price(
+                    side=side,
+                    entry_price=entry_price,
+                    risk_per_unit=risk_per_unit,
+                    rr=rr,
+                    protection=protection,
+                    trail_activate_rr=trail_activate_rr,
+                )
 
             if trailing_stop is not None:
                 current_stop = mp.get("current_stop")

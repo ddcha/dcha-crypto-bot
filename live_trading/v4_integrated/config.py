@@ -209,6 +209,10 @@ ZONE_CACHE_REFRESH_SECONDS = 3600  # Zone cache 갱신 주기 (1시간 = H4 봉 
 # 청산 후 재진입 쿨다운 (시간)
 EXIT_COOLDOWN_HOURS = 8    # H4 2봉 = 8시간
 
+# ★트레일링 방식 (2026-07-04 기준조건): "backtest"=백테엔진 트레일(직전봉 range중점−0.10×H4ATR),
+#   "rratchet"=구 라이브 R래칫. 백테 검증상 backtest 가 MDD −17.75% vs R래칫 −27% 로 우위 → 기본 backtest.
+TRAIL_MODE = "backtest"
+
 LOG_LEVEL = "INFO"
 
 # ─────────────────────────────────────────────
