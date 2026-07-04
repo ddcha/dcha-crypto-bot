@@ -134,7 +134,7 @@ def generate_entry_signal(df_h4_raw, df_h1_raw, balance, risk_pct, fee_rate, max
     real_last_ts = pd.Timestamp(df_h4["timestamp"].iloc[-1])
     sim.USE_COMBO_UNION = True; sim.COMBO_UNION_ATOMSETS = _ATOMSETS; _LAST_TAGS.clear()
     prepared = apply_indicators_and_build({"symbol": symbol or "SYM", "df_raw": _pad(df_h4, 30, 4), "df_h1_raw": _pad(df_h1, 120, 1)})
-    cand = sim.generate_candidates_from_prepared(prepared)["candidates"]
+    cand = sim.generate_candidates_from_prepared(prepared)["candidates"]   # ★파리티: 백테와 동일 non-emission 순차 gen(+full 히스토리 주입) → 백테 트레이드 그대로 재현
     if cand is None or len(cand) == 0:
         return {"should_enter": False, "reason": "no_candidate"}
     cand = cand.copy(); cand["entry_time"] = pd.to_datetime(cand["entry_time"], utc=True)

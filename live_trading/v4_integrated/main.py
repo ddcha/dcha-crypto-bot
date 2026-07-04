@@ -947,6 +947,26 @@ def calc_backtest_trail_stop(
     return min(candidate, float(entry_price))
 
 
+# ★파리티(2026-07-04): 백테는 full 히스토리(2022~)로 trades_v4 생성 → 라이브도 동일 입력이어야 재현.
+#   get_kline 은 1req 최대 1000봉이라 H4 는 페이지네이션 full 수집 + 캐시(이후 incremental merge).
+#   H1 은 refine 이 최근 ±12봉만 봐서 recent(~1000)로 충분 → 기존 유지.
+_H4_HIST_CACHE: dict = {}
+_PARITY_SINCE_MS = 1640995200000  # 2022-01-01 00:00 UTC
+
+
+def get_h4_full_history(exchange, category: str, symbol: str) -> pd.DataFrame:
+    cached = _H4_HIST_CACHE.get(symbol)
+    if cached is None:
+        df = exchange.get_full_klines_df(category=category, symbol=symbol, interval=H4_INTERVAL, since_ms=_PARITY_SINCE_MS)
+        _H4_HIST_CACHE[symbol] = df
+        print(f"[parity] {symbol} H4 full 히스토리 로드 {len(df)}봉 ({df['timestamp'].iloc[0]} ~)")
+        return df
+    recent = exchange.get_recent_klines_df(category=category, symbol=symbol, interval=H4_INTERVAL, limit=200)
+    merged = pd.concat([cached, recent], ignore_index=True).drop_duplicates("timestamp").sort_values("timestamp").reset_index(drop=True)
+    _H4_HIST_CACHE[symbol] = merged
+    return merged
+
+
 def _last_closed_h4_for_trail(exchange, category: str, symbol: str):
     """트레일용 직전 마감 H4봉 (high, low, ATR14). 신호경로와 동일하게 fetch 마지막 봉=마감봉으로 취급."""
     df = exchange.get_recent_klines_df(category=category, symbol=symbol, interval=H4_INTERVAL, limit=H4_LIMIT)
@@ -2528,12 +2548,11 @@ def main() -> None:
                         except Exception:
                             pass
 
+                    # ★파리티(보류): full 히스토리 주입 시 gen 155s/심볼 → 완화안(증분 gen) 확정 전까진 windowed 유지.
+                    #   get_h4_full_history / exchange.get_full_klines_df 는 dormant 인프라로 보존.
                     df_h4 = safe_api_call(
                         lambda: exchange.get_recent_klines_df(
-                            category=CATEGORY,
-                            symbol=symbol,
-                            interval=H4_INTERVAL,
-                            limit=H4_LIMIT,
+                            category=CATEGORY, symbol=symbol, interval=H4_INTERVAL, limit=H4_LIMIT,
                         ),
                         label=f"get_recent_klines_df_h4_{symbol}",
                     )

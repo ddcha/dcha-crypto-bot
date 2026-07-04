@@ -250,3 +250,33 @@ class BybitExchange:
         for item in items:
             rows.append({"timestamp": pd.to_datetime(int(item[0]), unit="ms", utc=True), "open": float(item[1]), "high": float(item[2]), "low": float(item[3]), "close": float(item[4]), "volume": float(item[5])})
         return pd.DataFrame(rows).sort_values("timestamp").drop_duplicates("timestamp").reset_index(drop=True)
+
+    def get_full_klines_df(self, category: str, symbol: str, interval: str, since_ms: int, max_pages: int = 40) -> pd.DataFrame:
+        """★파리티: since_ms(예 2022-01-01) 부터 현재까지 full 히스토리를 페이지네이션으로 수집.
+        Bybit get_kline 은 newest-first·최대 1000/req + end 파라미터 지원 → end 를 뒤로 밀며 역방향 수집.
+        H4 full(2022~) ≈ 4페이지. 시작 1회만 호출하고 이후 incremental merge(main 캐시).
+        """
+        all_items = []
+        end = None
+        for _ in range(max_pages):
+            kwargs = dict(category=category, symbol=symbol, interval=interval, limit=1000)
+            if end is not None:
+                kwargs["end"] = end
+            resp = self._call_with_retry(self.session.get_kline, **kwargs)
+            items = resp.get("result", {}).get("list", [])
+            if not items:
+                break
+            all_items.extend(items)
+            oldest = min(int(x[0]) for x in items)
+            if oldest <= since_ms or len(items) < 1000:
+                break
+            end = oldest - 1
+        rows = []
+        for item in all_items:
+            ts = int(item[0])
+            if ts < since_ms:
+                continue
+            rows.append({"timestamp": pd.to_datetime(ts, unit="ms", utc=True), "open": float(item[1]), "high": float(item[2]), "low": float(item[3]), "close": float(item[4]), "volume": float(item[5])})
+        if not rows:
+            raise ValueError(f"No full kline data for {symbol} {interval} since {since_ms}")
+        return pd.DataFrame(rows).sort_values("timestamp").drop_duplicates("timestamp").reset_index(drop=True)

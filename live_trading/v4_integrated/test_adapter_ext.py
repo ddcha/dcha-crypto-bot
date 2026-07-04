@@ -10,6 +10,8 @@ import strategy_engine as SE
 DATA = "../../data_cache"
 TRADES = "../../walkforward_result/trades_v4.csv"
 N_SAMPLE = 25
+TAIL_H4 = int(os.environ.get("TAIL_H4", "1600"))       # ★히스토리 창 (라이브 H4_LIMIT 대응) — env 로 스윕
+TAIL_H1 = TAIL_H4 * 4
 
 
 def load(sym, tf):
@@ -36,8 +38,8 @@ def main():
             cache[sym] = (load(sym, "4h"), load(sym, "1h"))
         h4, h1 = cache[sym]
         SE.set_btc_regime(btc[btc["timestamp"] <= ets])
-        h4c = h4[h4["timestamp"] <= ets].tail(1600).reset_index(drop=True)
-        h1c = h1[h1["timestamp"] <= ets + pd.Timedelta(hours=3, minutes=59)].tail(6400).reset_index(drop=True)
+        h4c = h4[h4["timestamp"] <= ets].tail(TAIL_H4).reset_index(drop=True)
+        h1c = h1[h1["timestamp"] <= ets + pd.Timedelta(hours=3, minutes=59)].tail(TAIL_H1).reset_index(drop=True)
         if len(h4c) < 260 or len(h1c) < 420:
             reasons["insufficient_hist"] = reasons.get("insufficient_hist", 0) + 1; continue
         sig = SE.generate_entry_signal(h4c, h1c, balance=10000.0, risk_pct=1.0, fee_rate=0.00055, max_notional_mult=3.0, symbol=sym)
