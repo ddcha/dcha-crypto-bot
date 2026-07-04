@@ -362,7 +362,7 @@ def simulate_trade_with_plan_runner_no_time_exit(df_local, entry_idx, side, entr
     )
 
 
-def generate_candidates_from_prepared(prepared, _resume=None, _stop_at=None):
+def generate_candidates_from_prepared(prepared, _resume=None, _stop_at=None, _arm_bar=None):
     """
     Stage 1: REFINE 제거 + 기존 구조 유지.
 
@@ -420,6 +420,7 @@ def generate_candidates_from_prepared(prepared, _resume=None, _stop_at=None):
     #   ※ touched(지정가 터치)·freshness(이미 end=i-1)는 전 단계 불변 = 과교정 금지
     import os as _os_h
     _HONEST = int(_os_h.environ.get("HONEST_STAGE", "0"))
+    armed = []   # ★_arm_bar: 해당 봉에서 '모든 게이트 통과·터치 대기' 무장존 노출(진입 안 함)
     def _sb(idx, need):  # signal-bar: 해당 단계 이상이면 직전 종가확정봉(i-1), 아니면 i
         return idx - 1 if _HONEST >= need else idx
 
@@ -552,7 +553,8 @@ def generate_candidates_from_prepared(prepared, _resume=None, _stop_at=None):
             if _HONEST >= 1 and i <= s["zone_created_idx"]:  # S0: zone 생성당봉 진입 금지(동어반복 차단)
                 continue
             touched = (row["high"] >= s["zone_low"]) and (row["low"] <= s["zone_high"])
-            if not touched:
+            _arming = (_arm_bar is not None and i == _arm_bar)   # ★무장 스캔: 터치 안 됐어도 게이트 평가
+            if not touched and not _arming:
                 continue
 
             # ── feature/h1-refine-zone: H1×H4 존 정밀화 '계산' (룩어헤드 0, strict <) ──
@@ -728,6 +730,15 @@ def generate_candidates_from_prepared(prepared, _resume=None, _stop_at=None):
                             _track_skip("combo_union_fail")
                             continue
 
+                if _arming:   # ★무장존 노출: 진입 안 하고 기록 후 다음 존 (전부 수집)
+                    armed.append({"side": "short", "entry": float(fill_entry_price), "sl": float(sl_candidate),
+                                  "risk_per_unit": abs(float(fill_entry_price) - float(sl_candidate)),
+                                  "zone_low": float(s["zone_low"]), "zone_high": float(s["zone_high"]),
+                                  "zone_created_idx": int(s["zone_created_idx"]), "entry_idx": int(i),
+                                  "grade": g, "score": float(eff_score), "expansion_state": bool(expansion_candidate),
+                                  "tp_plan": dict(plan), "atoms": {k: bool(v) for k, v in _gtags.items()},
+                                  "entry_time": row["timestamp"]})
+                    continue
                 entry_found = True
                 used_structure = s
                 used_effective_score = eff_score
@@ -841,6 +852,15 @@ def generate_candidates_from_prepared(prepared, _resume=None, _stop_at=None):
                             _track_skip("combo_union_fail")
                             continue
 
+                if _arming:   # ★무장존 노출: 진입 안 하고 기록 후 다음 존 (전부 수집)
+                    armed.append({"side": "long", "entry": float(fill_entry_price), "sl": float(sl_candidate),
+                                  "risk_per_unit": abs(float(fill_entry_price) - float(sl_candidate)),
+                                  "zone_low": float(s["zone_low"]), "zone_high": float(s["zone_high"]),
+                                  "zone_created_idx": int(s["zone_created_idx"]), "entry_idx": int(i),
+                                  "grade": g, "score": float(eff_score), "expansion_state": bool(expansion_candidate),
+                                  "tp_plan": dict(plan), "atoms": {k: bool(v) for k, v in _gtags.items()},
+                                  "entry_time": row["timestamp"]})
+                    continue
                 entry_found = True
                 used_structure = s
                 used_effective_score = eff_score
@@ -1001,6 +1021,7 @@ def generate_candidates_from_prepared(prepared, _resume=None, _stop_at=None):
         "df_h1": df_h1,
         "candidates": candidates_df,
         "no_fill": no_fill_df,
+        "armed": armed,   # ★_arm_bar 지정 시: 그 봉의 무장존(터치 대기) 목록 — 라이브 지정가 거치용
         # ★증분 gen 재개용 터미널 상태 (구조체 객체 상태는 prepared["structures"] 에 영속)
         "_state": {
             "i": i,
