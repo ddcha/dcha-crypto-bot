@@ -362,9 +362,14 @@ def simulate_trade_with_plan_runner_no_time_exit(df_local, entry_idx, side, entr
     )
 
 
-def generate_candidates_from_prepared(prepared):
+def generate_candidates_from_prepared(prepared, _resume=None, _stop_at=None):
     """
     Stage 1: REFINE 제거 + 기존 구조 유지.
+
+    ★증분 gen (라이브 파리티, 2026-07-05): _resume/_stop_at 로 순차 sim 을 이어감.
+      _stop_at=M → i>=M 에서 중단하고 상태 반환. _resume=state → 그 상태에서 재개.
+      기본(None) = 백테 경로 완전 불변. 반환에 "_state"(i·candidates·active_structures·
+      last_exit_idx·used_zone_ids·daily_trade_count) 포함. 구조체 객체는 caller 가 영속 유지(_ls_/used).
     
     변경점:
     - refine_entry_with_h1_fvg 호출 제거
@@ -379,22 +384,32 @@ def generate_candidates_from_prepared(prepared):
     structures = prepared["structures"]
     structures_by_zone_created = prepared["structures_by_zone_created"]
 
-    for s in structures:
-        s["used"] = False
-        # ⭐ 비멱등 수정: advance_zone_lifespan 의 _ls_* 증분상태도 함께 리셋.
-        #    (안 하면 같은 prepared 2번째+ 호출 시 _ls_pos 가 시리즈 끝까지 전진해 있어
-        #     모든 존이 '끝 시점 역할'로 판정 = 룩어헤드성 오염. 멱등성 보장.)
-        for _lk in ("_ls_orig", "_ls_role", "_ls_broken", "_ls_pos"):
-            s.pop(_lk, None)
-
-    candidates = []
-    skip_reasons = {}
-    no_fill_log = []
-    active_structures = []
-    last_long_exit_idx = -9999
-    last_short_exit_idx = -9999
-    daily_trade_count = {}
-    used_zone_ids = set()
+    if _resume is None:
+        for s in structures:
+            s["used"] = False
+            # ⭐ 비멱등 수정: advance_zone_lifespan 의 _ls_* 증분상태도 함께 리셋.
+            #    (안 하면 같은 prepared 2번째+ 호출 시 _ls_pos 가 시리즈 끝까지 전진해 있어
+            #     모든 존이 '끝 시점 역할'로 판정 = 룩어헤드성 오염. 멱등성 보장.)
+            for _lk in ("_ls_orig", "_ls_role", "_ls_broken", "_ls_pos"):
+                s.pop(_lk, None)
+        candidates = []
+        skip_reasons = {}
+        no_fill_log = []
+        active_structures = []
+        last_long_exit_idx = -9999
+        last_short_exit_idx = -9999
+        daily_trade_count = {}
+        used_zone_ids = set()
+    else:
+        # ★증분 재개: 구조체 _ls_/used 상태는 caller 가 영속 유지(리셋 안 함).
+        candidates = _resume["candidates"]
+        skip_reasons = _resume.get("skip_reasons", {})
+        no_fill_log = _resume.get("no_fill_log", [])
+        active_structures = _resume["active_structures"]
+        last_long_exit_idx = _resume["last_long_exit_idx"]
+        last_short_exit_idx = _resume["last_short_exit_idx"]
+        daily_trade_count = _resume["daily_trade_count"]
+        used_zone_ids = _resume["used_zone_ids"]
 
     RELAX_MIN_SCORE = MIN_SCORE - FRESHNESS_MAX_BONUS  # ⭐ = 7.5 - 1.5 = 6.0
 
@@ -458,8 +473,10 @@ def generate_candidates_from_prepared(prepared):
     _h = df_struct["high"].values.astype(float)   # ⭐ 증분 수명 추적용
     _l = df_struct["low"].values.astype(float)
     _c = df_struct["close"].values.astype(float)
-    i = 200
+    i = 200 if _resume is None else int(_resume["i"])
     while i < len(df_struct) - 1:
+        if _stop_at is not None and i >= _stop_at:   # ★증분: 여기까지만 처리하고 상태 반환
+            break
         row = df_struct.iloc[i]
 
         if i in structures_by_zone_created:
@@ -984,6 +1001,18 @@ def generate_candidates_from_prepared(prepared):
         "df_h1": df_h1,
         "candidates": candidates_df,
         "no_fill": no_fill_df,
+        # ★증분 gen 재개용 터미널 상태 (구조체 객체 상태는 prepared["structures"] 에 영속)
+        "_state": {
+            "i": i,
+            "candidates": candidates,
+            "skip_reasons": skip_reasons,
+            "no_fill_log": no_fill_log,
+            "active_structures": active_structures,
+            "last_long_exit_idx": last_long_exit_idx,
+            "last_short_exit_idx": last_short_exit_idx,
+            "daily_trade_count": daily_trade_count,
+            "used_zone_ids": used_zone_ids,
+        },
     }
 
 
