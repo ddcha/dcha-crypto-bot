@@ -58,15 +58,20 @@ def match_fill_to_armed(symbol: str, filled_link_id: str, armed_list: list) -> d
     return None
 
 
+TOUCH_EDGE_BAND = 0.004   # ★진입가(존 엣지) ±0.4% 안에서만 트리거. 백테 fill=존 엣지와 일치.
+
+
 def armed_signal_on_touch(armed_list: list, current_price: float, cache_ts=None) -> dict:
-    """★현재가가 무장존을 터치하면 그 존(우선순위 최고)으로 entry_signal 호환 dict 반환.
+    """★현재가가 무장존 '엣지(진입가)' 근처면 그 존(우선순위 최고)으로 entry_signal 호환 dict 반환.
        main 의 기존 시장가 진입 흐름(build_managed_position/SL·TP)에 drop-in.
-       터치 = zone_low <= price <= zone_high. 백테는 우선순위(scored_active) 최상단 진입."""
+       ★트리거 = |price - entry| <= 0.4% (존 안 아무데나 X — 백테는 엣지에서 체결. 깊숙이 들어간
+       stale/잘못된가격 진입 방지). 백테 우선순위(scored_active) 최상단 진입."""
     if not current_price or current_price <= 0:
         return {"should_enter": False, "reason": "no_price"}
-    touched = [a for a in armed_list if float(a["zone_low"]) <= current_price <= float(a["zone_high"])]
+    touched = [a for a in armed_list
+               if abs(current_price - float(a["entry"])) <= TOUCH_EDGE_BAND * float(a["entry"])]
     if not touched:
-        return {"should_enter": False, "reason": "no_armed_touch"}
+        return {"should_enter": False, "reason": "no_armed_touch_at_edge"}
     a = min(touched, key=lambda x: int(x.get("priority", 999)))     # 최우선 존
     ent = float(a["entry"]); sl = float(a["sl"])
     return {
