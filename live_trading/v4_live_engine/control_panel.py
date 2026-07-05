@@ -440,157 +440,49 @@ def render_main_controls(live_settings: Dict[str, Any], runtime_state: Dict[str,
 
     with top_left:
         trading_enabled = st.toggle("Trading Enabled", value=bool(system.get("trading_enabled", True)))
-        max_open_positions = st.number_input(
-            "Max Open Positions",
-            min_value=1,
-            max_value=20,
-            value=int(portfolio.get("max_open_positions", 3)),
-            step=1,
-        )
-        # ⭐ v1.9_BASELINE: Global Risk Multiplier (runtime 조절)
-        # 모든 진입의 risk_pct 에 곱해지는 전역 배수.
-        # 권장: 저자본 공격 2.0 / 중자본 1.5 / 고자본 방어 0.5~1.0
-        risk_multiplier = st.number_input(
-            "Global Risk Multiplier",
-            min_value=0.1,
-            max_value=3.0,
-            value=float(portfolio.get("risk_multiplier", 1.0)),
-            step=0.1,
-            format="%.2f",
-            help="전역 risk 배수 (1.0=백테스트 기준). 저자본=2.0, 고자본=0.5~1.0 권장.",
-        )
-        orderbook_limit = st.number_input(
-            "Orderbook Limit",
-            min_value=1,
-            max_value=500,
-            value=int(execution.get("orderbook_limit", 50)),
-            step=1,
-        )
-        poll_fill_timeout_sec = st.number_input(
-            "Fill Sync Retries",
-            min_value=1,
-            max_value=60,
-            value=int(execution.get("poll_fill_timeout_sec", 8)),
-            step=1,
-        )
+        # ★v4 무장존 기준 — 수치 파라미터는 코드/기본값 고정(패널 변경 불가). 조작은 토글/자산 on-off 만.
+        st.info("**v4 기준 고정** — 리스크캡 15%·만기컷 36h·트레일=백테엔진·리스크=조합테이블. "
+                "아래 수치들은 백테와 동일하게 코드 고정이라 패널에서 변경하지 않습니다.")
+        with st.expander("v4 고정 수치 (읽기전용)", expanded=False):
+            st.caption(f"Max Open {int(portfolio.get('max_open_positions', 9))} · RiskMult {float(portfolio.get('risk_multiplier', 1.0))} · "
+                       f"Orderbook {int(execution.get('orderbook_limit', 50))} · FillRetries {int(execution.get('poll_fill_timeout_sec', 8))}")
+            st.caption(f"Runner: fast2r {int(protection.get('runner_fast_2r_bars_max', 3))} · above2r {int(protection.get('runner_above_2r_bars_min', 3))} · "
+                       f"minConds {int(protection.get('runner_candidate_min_conds', 2))} · protectLockR {float(protection.get('runner_protect_locked_r', 0.30))}")
+        # 값 = 저장된 설정/기본값 그대로 (위젯 없음 = 변경 불가)
+        max_open_positions = int(portfolio.get("max_open_positions", 9))
+        risk_multiplier = float(portfolio.get("risk_multiplier", 1.0))
+        orderbook_limit = int(execution.get("orderbook_limit", 50))
+        poll_fill_timeout_sec = int(execution.get("poll_fill_timeout_sec", 8))
         position_management_enabled = st.toggle(
             "Position Management Enabled",
             value=bool(protection.get("position_management_enabled", True)),
         )
-        runner_lifecycle_enabled = st.toggle(
-            "Runner Lifecycle Enabled",
-            value=bool(protection.get("runner_lifecycle_enabled", True)),
-        )
-        disable_time_exit_for_runner = st.toggle(
-            "Disable Time Exit For Runner",
-            value=bool(protection.get("disable_time_exit_for_runner", True)),
-        )
-        runner_fast_2r_bars_max = st.number_input(
-            "Runner Fast 2R Bars Max",
-            min_value=1,
-            max_value=20,
-            value=int(protection.get("runner_fast_2r_bars_max", 3)),
-            step=1,
-        )
-        runner_above_2r_bars_min = st.number_input(
-            "Runner Above 2R Bars Min",
-            min_value=1,
-            max_value=20,
-            value=int(protection.get("runner_above_2r_bars_min", 3)),
-            step=1,
-        )
-        runner_max_rr_after_2r_min = st.number_input(
-            "Runner Max RR After 2R Min",
-            min_value=0.0,
-            max_value=20.0,
-            value=float(protection.get("runner_max_rr_after_2r_min", 3.0)),
-            step=0.1,
-            format="%.2f",
-        )
-        runner_candidate_min_conds = st.number_input(
-            "Runner Candidate Min Conds",
-            min_value=1,
-            max_value=3,
-            value=int(protection.get("runner_candidate_min_conds", 2)),
-            step=1,
-        )
-        runner_post_filter_enabled = st.toggle(
-            "Runner Post Filter Enabled",
-            value=bool(protection.get("runner_post_filter_enabled", True)),
-        )
-        runner_post_filter_max_rr_after_2r = st.number_input(
-            "Runner Post Filter Max RR After 2R",
-            min_value=0.0,
-            max_value=20.0,
-            value=float(protection.get("runner_post_filter_max_rr_after_2r", 1.5)),
-            step=0.1,
-            format="%.2f",
-        )
-        runner_protect_locked_r = st.number_input(
-            "Runner Protect Locked R",
-            min_value=0.0,
-            max_value=10.0,
-            value=float(protection.get("runner_protect_locked_r", 0.30)),
-            step=0.05,
-            format="%.2f",
-        )
-        runner_protect_only_if_be_moved = st.toggle(
-            "Runner Protect Only If BE Moved",
-            value=bool(protection.get("runner_protect_only_if_be_moved", True)),
-        )
+        runner_lifecycle_enabled = bool(protection.get("runner_lifecycle_enabled", True))
+        disable_time_exit_for_runner = bool(protection.get("disable_time_exit_for_runner", True))
+        runner_fast_2r_bars_max = int(protection.get("runner_fast_2r_bars_max", 3))
+        runner_above_2r_bars_min = int(protection.get("runner_above_2r_bars_min", 3))
+        runner_max_rr_after_2r_min = float(protection.get("runner_max_rr_after_2r_min", 3.0))
+        runner_candidate_min_conds = int(protection.get("runner_candidate_min_conds", 2))
+        runner_post_filter_enabled = bool(protection.get("runner_post_filter_enabled", True))
+        runner_post_filter_max_rr_after_2r = float(protection.get("runner_post_filter_max_rr_after_2r", 1.5))
+        runner_protect_locked_r = float(protection.get("runner_protect_locked_r", 0.30))
+        runner_protect_only_if_be_moved = bool(protection.get("runner_protect_only_if_be_moved", True))
 
     with top_right:
         st.markdown("### 자산별 설정")
         for symbol, cfg in assets.items():
             with st.container(border=True):
-                c1, c2, c3, c4, c5 = st.columns(5)
+                c1, c2 = st.columns([1, 2])
                 with c1:
                     cfg["enabled"] = st.toggle(f"{symbol} Enabled", value=bool(cfg.get("enabled", True)), key=f"{symbol}_enabled")
                 with c2:
-                    cfg["risk_pct"] = risk_pct_from_ui(
-                        st.number_input(
-                            f"{symbol} Risk (%)",
-                            min_value=0.0,
-                            max_value=100.0,
-                            value=risk_pct_to_ui(cfg.get("risk_pct", 0.0)),
-                            step=0.1,
-                            format="%.3f",
-                            key=f"{symbol}_risk",
-                        )
-                    )
-                with c3:
-                    cfg["qty_step"] = float(
-                        st.number_input(
-                            f"{symbol} Qty Step",
-                            min_value=0.0,
-                            value=float(cfg.get("qty_step", 0.0)),
-                            step=0.001,
-                            format="%.6f",
-                            key=f"{symbol}_step",
-                        )
-                    )
-                with c4:
-                    cfg["min_order_qty"] = float(
-                        st.number_input(
-                            f"{symbol} Min Qty",
-                            min_value=0.0,
-                            value=float(cfg.get("min_order_qty", 0.0)),
-                            step=0.001,
-                            format="%.6f",
-                            key=f"{symbol}_minqty",
-                        )
-                    )
-                with c5:
-                    cfg["qty_decimals"] = int(
-                        st.number_input(
-                            f"{symbol} Qty Decimals",
-                            min_value=0,
-                            max_value=10,
-                            value=int(cfg.get("qty_decimals", 3)),
-                            step=1,
-                            key=f"{symbol}_dec",
-                        )
-                    )
+                    # ★risk_pct 는 v4 미사용(combo_risk_table 사용). qty 규격은 거래소 고정 → 읽기전용.
+                    st.caption(f"qty_step {cfg.get('qty_step')} · min {cfg.get('min_order_qty')} · dec {cfg.get('qty_decimals')}  (risk=조합테이블·15%캡)")
+                # 값 유지 (변경 위젯 없음 = 코드/거래소 고정)
+                cfg["risk_pct"] = float(cfg.get("risk_pct", 0.0))
+                cfg["qty_step"] = float(cfg.get("qty_step", 0.0))
+                cfg["min_order_qty"] = float(cfg.get("min_order_qty", 0.0))
+                cfg["qty_decimals"] = int(cfg.get("qty_decimals", 3))
 
                 c6, c7 = st.columns(2)
                 with c6:
