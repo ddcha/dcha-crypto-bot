@@ -203,6 +203,7 @@ def get_balance_metrics(live_settings: Dict[str, Any], runtime_state: Dict[str, 
 
         metrics["wallet_balance"] = wallet_balance
         metrics["equity"] = equity
+        system["last_error"] = ""   # ★성공 시 이전 에러(stale 401 등) clear — 안 지우면 영구표시됨
 
         if equity is not None:
             today = datetime.now(timezone.utc).date()
