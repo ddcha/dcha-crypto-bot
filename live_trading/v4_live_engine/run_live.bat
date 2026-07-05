@@ -10,6 +10,13 @@ if not exist live_settings.json if "%BYBIT_DEMO_API_KEY%%BYBIT_LIVE_API_KEY%%BYB
   echo [run] 경고: live_settings.json(컨트롤패널) 도 env 키도 없음. control_panel.py 로 키 입력 필요.
 )
 
+REM ★싱글턴 가드: 반복 실행해도 워커/메인이 누적되지 않게 이미 떠있으면 중단.
+tasklist /v /fi "imagename eq cmd.exe" 2>nul | findstr /i "arm_worker" >nul
+if %errorlevel%==0 (
+  echo [run] 중단: arm_worker 가 이미 실행 중 (중복 기동 방지^). 먼저 종료 후 재실행하세요.
+  exit /b 1
+)
+
 echo [run] 배경 워커 기동 (별 창) — H4마다 무장존 재계산
 start "arm_worker" cmd /c "python -u arm_worker.py --loop --live > arm_worker.log 2>&1"
 

@@ -14,6 +14,16 @@ if [ ! -f live_settings.json ] && [ -z "$BYBIT_DEMO_API_KEY$BYBIT_LIVE_API_KEY$B
   echo "[run] 경고: live_settings.json(컨트롤패널) 도 env 키도 없음. control_panel.py 로 키 입력하거나 env 설정 필요."
 fi
 
+# ★싱글턴 가드: run_live 를 반복 실행해도 워커/메인이 누적되지 않게 이미 떠있으면 중단.
+if pgrep -f "arm_worker.py --loop" >/dev/null 2>&1; then
+  echo "[run] 중단: arm_worker 가 이미 실행 중 (중복 기동 방지). 먼저 종료 후 재실행하세요."
+  exit 1
+fi
+if pgrep -f "python.* main.py" >/dev/null 2>&1; then
+  echo "[run] 중단: main.py 가 이미 실행 중 (중복 기동 방지). 먼저 종료 후 재실행하세요."
+  exit 1
+fi
+
 echo "[run] 배경 워커 기동 (H4마다 무장존 → armed_cache.json)"
 python -u arm_worker.py --loop --live > arm_worker.log 2>&1 &
 WORKER_PID=$!

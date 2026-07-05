@@ -19,8 +19,11 @@
 **기존처럼 컨트롤패널로 키를 입력하면 그대로 됩니다.** 워커·메인 둘 다 `live_settings.json` 우선 → env 폴백,
 모드(live/demo)도 패널 설정을 따릅니다(제가 credential 경로는 안 건드림).
 ```bash
-python control_panel.py     # ← 기존처럼 여기서 API 키·모드(demo/live) 입력 → live_settings.json 저장
+bash run_panel.sh           # ← 싱글턴 런처(이미 떠있으면 중복 기동 안 함). 여기서 API 키·모드 입력 → live_settings.json
+#   Windows: run_panel.bat  /  직접: python -m streamlit run control_panel.py --server.port 8501
 ```
+> ⚠️ 패널을 `python -m streamlit ...` 로 직접 반복 실행하면 포트가 바쁠 때 8502…로 옮겨 떠서 인스턴스가 쌓인다.
+> **항상 `run_panel.sh`(포트 8501 리스닝 체크로 중복 차단)** 로 켜세요. run_live.sh/bat 도 워커·메인 싱글턴 가드 내장.
 (env 로도 가능: `BYBIT_DEMO_API_KEY/SECRET` 또는 `BYBIT_LIVE_API_KEY/SECRET`)
 
 ## 텔레그램 알림 (이미 연동됨 — 토큰만)
