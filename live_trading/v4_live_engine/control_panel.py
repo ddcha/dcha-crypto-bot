@@ -815,338 +815,95 @@ def render_trade_journal() -> None:
 
 
 def render_active_zones(live_settings: Dict[str, Any]) -> None:
-    st.subheader("Active Zones 모니터")
+    """★v4 무장존 모니터 — 터치 시 진입되는 진짜 후보(현재가 근처 무장존)만 표시.
+       배경워커(arm_worker) 가 H4마다 계산한 armed_cache.json 을 읽음. (옛 tier zone_cache 폐기)"""
+    import json as _json, os as _os, time as _t
+    st.subheader("무장존 모니터 (v4 — 터치 시 진입 후보)")
 
     api_key, api_secret, mode = get_active_api_credentials(live_settings)
-    if not api_key or not api_secret:
-        st.warning("API 키가 설정되지 않았습니다.")
+
+    col1, col2 = st.columns([2, 2])
+    with col1:
+        only_near = st.radio("표시", ["진입 임박(근처)", "전체 무장존"], horizontal=True, key="armed_view",
+                             help="진입 임박: 현재가 근처(터치 임박) 후보만. 전체: 대기 중인 모든 무장존(디버깅).")
+    with col2:
+        near_pct = st.slider("근처 기준 (%) — 현재가↔진입가 거리", 0.1, 3.0, 1.0, 0.1, key="armed_near_pct")
+
+    cache_path = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "armed_cache.json")
+    if not _os.path.exists(cache_path):
+        st.error("⚠ armed_cache.json 없음. arm_worker(--loop --live) 첫 계산(~15분) 완료 후 표시됩니다.")
         return
-
-    # ⭐ v2.0_WICK: 모드 토글 + 필터 옵션
-    col_mode, col_tier = st.columns([2, 2])
-    with col_mode:
-        view_mode = st.radio(
-            "표시 모드",
-            ["진입 후보만", "전체 보기"],
-            horizontal=True,
-            key="zones_view_mode",
-            help="진입 후보만: 실전 엔진이 진입 가능한 zone 만. 전체 보기: 모든 active zone (디버깅용)."
-        )
-    with col_tier:
-        if view_mode == "진입 후보만":
-            tier_filter_label = st.selectbox(
-                "Tier 필터 (Stage 4K)",
-                ["전체 진입가능 (ALPHA + SWEEP)", "ALPHA 만 (고품질, 999× cap)", "ALPHA_MAX 만 (최강)"],
-                index=0,
-                key="zones_tier_filter",
-                help="실전 엔진의 진입가능 tier: ALPHA_MAX/HIGH/MED + SWEEP_GEM/ROOM_FVG/ROOM_ONLY (4I/4J 차단 통과한 것). ALPHA 만 선택시 SWEEP 제외 (notional cap 무제한)."
-            )
-            if "전체" in tier_filter_label:
-                allowed_tiers = {"ALPHA_MAX", "ALPHA_HIGH", "ALPHA_MED",
-                                  "SWEEP_GEM", "SWEEP_ROOM_FVG", "SWEEP_ROOM_ONLY"}
-            elif "ALPHA 만" in tier_filter_label:
-                allowed_tiers = {"ALPHA_MAX", "ALPHA_HIGH", "ALPHA_MED"}
-            else:  # ALPHA_MAX 만
-                allowed_tiers = {"ALPHA_MAX"}
-        else:
-            allowed_tiers = {"ALPHA_MAX", "ALPHA_HIGH", "ALPHA_MED",
-                              "SWEEP_GEM", "SWEEP_ROOM_FVG", "SWEEP_ROOM_ONLY",
-                              "COMPLETE_OUT", "SKIP_MSS"}
-
-    # 거리 필터 (진입 후보 모드만): 0=닿은 것만, > 0 은 디버깅용
-    if view_mode == "진입 후보만":
-        col_dist, col_wick = st.columns([2, 1])
-        with col_dist:
-            max_distance_pct = st.slider(
-                "최대 거리 (%) — 0 = 닿은 zone 만",
-                min_value=0.0, max_value=10.0, value=0.0, step=0.1,
-                key="zones_max_distance",
-                help="0% = 현재가가 zone 안에 있거나 1m wick touch 한 zone 만 표시. > 0 은 디버깅용 (가까운 zone 표시)."
-            )
-        with col_wick:
-            use_1m_wick_panel = st.checkbox(
-                "1m wick touch",
-                value=True,
-                key="zones_use_1m_wick",
-                help="현재가가 zone 밖이라도 직전 5분 1분봉 wick 이 zone touch + 이탈거리 30% 이내인 zone 도 표시"
-            )
-    else:
-        max_distance_pct = 999.0
-        use_1m_wick_panel = False
-
-    if not st.button("Zone 조회", use_container_width=True, key="btn_check_zones"):
-        return
-
-    # ====================================================================
-    # v2.2: main.py 가 cache/zones_cache.pkl 에 저장한 것을 read
-    # main.py 가 1시간마다 zone cache refresh 하므로 control_panel 은 fetch X
-    # CPU 0%, API 호출 0회 - 즉시 응답
-    # ====================================================================
-    import pickle
-    import os
-    import time as _time_for_cache
-
+    age = _t.time() - _os.path.getmtime(cache_path)
     try:
-        from config import (
-            EXCLUDE_RECENT_H1_FOR_TIER,
-            USE_TIER_PRIORITY_SORT,
-            USE_1M_WICK_TOUCH,
-            WICK_TOUCH_LOOKBACK_BARS,
-            WICK_TOUCH_MAX_EXIT_FRAC,
-        )
-    except Exception:
-        EXCLUDE_RECENT_H1_FOR_TIER = 0
-        USE_TIER_PRIORITY_SORT = True
-        USE_1M_WICK_TOUCH = True
-        WICK_TOUCH_LOOKBACK_BARS = 5
-        WICK_TOUCH_MAX_EXIT_FRAC = 0.30
-
-    cache_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache", "zones_cache.pkl")
-
-    if not os.path.exists(cache_path):
-        st.error(
-            "⚠ Zone cache 파일이 없습니다.\n"
-            "main.py 가 첫 SYMBOL_LOOP 완료 후 (~수분) 다시 시도하세요.\n"
-            f"기대 경로: {cache_path}"
-        )
-        return
-
-    cache_age_sec = _time_for_cache.time() - os.path.getmtime(cache_path)
-    if cache_age_sec > 3700:  # 1시간 + 100초
-        st.warning(
-            f"⚠ Zone cache 가 {int(cache_age_sec/60)}분 {int(cache_age_sec%60)}초 전 데이터입니다. "
-            f"main.py 가 정상 가동 중인지 확인하세요."
-        )
-    elif cache_age_sec > 1800:  # 30분 이상
-        st.info(f"ℹ Zone cache: {int(cache_age_sec/60)}분 전 데이터 (정상 - 1시간마다 갱신)")
-
-    try:
-        with open(cache_path, "rb") as f:
-            cache_data = pickle.load(f)
-        zone_snapshot = cache_data.get("snapshot", {})
-        cache_meta = cache_data.get("_meta", {})
+        d = _json.load(open(cache_path, encoding="utf-8"))
     except Exception as e:
-        st.error(f"⚠ Zone cache 읽기 실패: {e}")
+        st.error(f"캐시 읽기 실패: {e}")
         return
+    st.caption(f"📦 armed_cache: {str(d.get('computed_at', '?'))[:19]} | age {int(age/60)}분 | {d.get('config', '?')}")
+    if age > 3 * 3600 + 900:
+        st.warning(f"⚠ 캐시가 {int(age/60)}분 전 — 워커(arm_worker --loop --live) 가동 확인.")
 
-    if not zone_snapshot:
-        st.warning("Zone cache 가 비어있음. main.py 첫 SYMBOL_LOOP 완료 대기.")
-        return
-
-    try:
-        # runtime_state 의 현재 포지션 정보 (보유 중 표시용)
+    ex = None
+    if api_key and api_secret:
         try:
-            runtime_state_local = load_runtime_state()
-            symbols_state = runtime_state_local.get("symbols", {})
+            ex = BybitExchange(api_key, api_secret, use_testnet=False, use_demo=(mode == "demo"))
         except Exception:
-            symbols_state = {}
+            ex = None
 
-        # enabled 된 심볼 전체 스캔
-        active_symbols = [sym for sym, cfg in live_settings["assets"].items() if cfg.get("enabled", False)]
-
-        st.caption(f"📦 Cache: {cache_meta.get('saved_at', '?')} | symbols={cache_meta.get('n_symbols', '?')} | age={int(cache_age_sec)}s")
-
-        for symbol in active_symbols:
+    active_symbols = [s for s, c in live_settings["assets"].items() if c.get("enabled", False)]
+    syms = d.get("symbols", {})
+    total_near = 0
+    for symbol in active_symbols:
+        v = syms.get(symbol)
+        if not v:
+            continue
+        armed = v.get("armed", [])
+        if v.get("reason"):
+            st.info(f"{symbol}: {v['reason']} (무장 0)")
+            continue
+        price = None
+        if ex is not None:
             try:
-                if symbol not in zone_snapshot:
-                    st.info(f"{symbol}: cache 없음 (비활성 또는 zone cache refresh 미진행)")
-                    continue
-
-                cached = zone_snapshot[symbol]
-
-                # 에러로 cache 된 경우
-                if "error" in cached:
-                    st.warning(f"{symbol}: cache 생성 시 에러 ({cached['error']})")
-                    continue
-
-                # cache 에서 데이터 추출 (기존 변수명 유지)
-                evaluated_zones = cached.get("evaluated_zones", [])
-                active_structures = cached.get("active_structures", [])
-                current_close = float(cached.get("current_close") or 0.0)
-                h4_trend = str(cached.get("h4_trend", "?"))
-
-                # 1m wick touch 데이터 (cache 의 tail5)
-                df_1m_recent = None
-                if view_mode == "진입 후보만" and use_1m_wick_panel:
-                    _df_1m_records = cached.get("df_1m_recent_tail5", [])
-                    if _df_1m_records:
-                        try:
-                            import pandas as _pd
-                            df_1m_recent = _pd.DataFrame(_df_1m_records)
-                            if "timestamp" in df_1m_recent.columns:
-                                df_1m_recent["timestamp"] = _pd.to_datetime(df_1m_recent["timestamp"], utc=True)
-                        except Exception:
-                            df_1m_recent = None
-
-                # 가격 포맷을 코인 가격대에 맞춰 동적 조정
-                if current_close < 1:
-                    price_fmt = ",.4f"
-                elif current_close < 100:
-                    price_fmt = ",.3f"
-                else:
-                    price_fmt = ",.2f"
-
-                # 포지션 정보 (cache 에서)
-                position_info = ""
-                if cached.get("has_position"):
-                    pside = cached.get("position_side", "?")
-                    pqty = cached.get("position_qty", 0.0)
-                    position_info = f" | 📍 {pside} qty {pqty}"
-
-                # v2.0_WICK: 필터링 수행 — strategy_engine 진입 로직과 매핑
-                def _is_touched(z):
-                    """현재가가 zone 안 OR 직전 5분 1m wick touch (이탈거리 ≤ 30%)."""
-                    zlow = float(z["zone_low"])
-                    zhigh = float(z["zone_high"])
-                    # 1) zone 안에 현재가
-                    touched_now = (zlow <= current_close <= zhigh)
-                    if touched_now:
-                        return True, "current_price_in_zone"
-                    # 2) 1m wick touch (옵션)
-                    if not use_1m_wick_panel or df_1m_recent is None or len(df_1m_recent) == 0:
-                        return False, "not_touched"
-                    try:
-                        recent_1m = df_1m_recent.tail(int(WICK_TOUCH_LOOKBACK_BARS))
-                        recent_high = float(recent_1m["high"].max())
-                        recent_low = float(recent_1m["low"].min())
-                        wick_touched = (recent_high >= zlow) and (recent_low <= zhigh)
-                        if not wick_touched:
-                            return False, "no_wick_touch"
-                        zone_size = zhigh - zlow
-                        if zone_size <= 0:
-                            return False, "zero_zone_size"
-                        if z["type"] == "long":
-                            exit_distance = max(0.0, current_close - zhigh)
-                        else:
-                            exit_distance = max(0.0, zlow - current_close)
-                        exit_frac = exit_distance / zone_size
-                        if exit_frac <= WICK_TOUCH_MAX_EXIT_FRAC:
-                            return True, f"wick_touch_exit{exit_frac:.0%}"
-                        return False, f"wick_touch_too_late_exit{exit_frac:.0%}"
-                    except Exception:
-                        return False, "wick_check_error"
-
-                def zone_passes_filter(z):
-                    if view_mode == "전체 보기":
-                        return True
-                    # 진입 후보 모드
-                    # 1) tier 필터
-                    if z["tier"] not in allowed_tiers:
-                        return False
-                    # 2) tier passable (4I/4J 차단, RP skip 모두 포함)
-                    if not z["tier_passable"]:
-                        return False
-                    # 3) trend 역행 제외
-                    if z["type"] == "short" and h4_trend == "up":
-                        return False
-                    if z["type"] == "long" and h4_trend == "down":
-                        return False
-                    # 4) ⭐ touched 판정 (max_distance_pct == 0 이면 touched only) ⭐
-                    if max_distance_pct <= 0.001:
-                        # 진짜 닿은 것만 (zone 안 또는 1m wick touch)
-                        touched, _reason = _is_touched(z)
-                        return touched
-                    # 5) max_distance_pct > 0: 거리 필터 (디버깅용)
-                    if z["type"] == "long":
-                        dist = (current_close - z["zone_high"]) / current_close * 100
-                    else:
-                        dist = (z["zone_low"] - current_close) / current_close * 100
-                    # zone 안이면 dist <= 0 이므로 통과. zone 밖이면 max_distance_pct 이내만
-                    if dist > max_distance_pct:
-                        return False
-                    return True
-
-                filtered_zones = [z for z in evaluated_zones if zone_passes_filter(z)]
-
-                # 중복 제거 (zone_low/high/type 같은 것, tier_mult_final 상위만)
-                def dedupe(zones):
-                    seen = {}
-                    for z in zones:
-                        key = (z["type"], round(z["zone_low"], 6), round(z["zone_high"], 6))
-                        if key not in seen or z["tier_mult_final"] > seen[key]["tier_mult_final"]:
-                            seen[key] = z
-                    return list(seen.values())
-
-                filtered_zones = dedupe(filtered_zones)
-
-                # 정렬
-                if USE_TIER_PRIORITY_SORT:
-                    filtered_zones.sort(key=lambda z: (
-                        -float(z["tier_mult_final"]),
-                        -float(z["eff_score"]),
-                        int(z["zone_created_idx"]),
-                    ))
-                else:
-                    filtered_zones.sort(key=lambda z: (
-                        -float(z["eff_score"]),
-                        int(z["zone_created_idx"]),
-                    ))
-
-                # 헤더 정보
-                st.markdown(
-                    f"**{symbol}** | 현재가 `{format(current_close, price_fmt)}` "
-                    f"| H4 trend: `{h4_trend}` | zones: {len(filtered_zones)}/{len(evaluated_zones)}"
-                    f"{position_info}"
-                )
-
-                if not filtered_zones:
-                    if view_mode == "진입 후보만":
-                        # 왜 없는지 힌트
-                        reason_hints = []
-                        if h4_trend == "up":
-                            reason_hints.append("H4 uptrend → SHORT 차단")
-                        elif h4_trend == "down":
-                            reason_hints.append("H4 downtrend → LONG 차단")
-                        if not evaluated_zones:
-                            reason_hints.append("Active zone 없음")
-                        hint = ", ".join(reason_hints) if reason_hints else "거리 또는 Tier 필터 조건 미충족"
-                        st.info(f"{symbol}: 진입 후보 없음 ({hint})")
-                    else:
-                        st.info(f"{symbol}: active zone 없음")
-                    continue
-
-                rows = []
-                for z in filtered_zones:
-                    in_zone = z["zone_low"] <= current_close <= z["zone_high"]
-                    if z["type"] == "long":
-                        diff_pct = (current_close - z["zone_high"]) / current_close * 100
-                    else:
-                        diff_pct = (z["zone_low"] - current_close) / current_close * 100
-
-                    # 상태 표시
-                    if not z["tier_passable"]:
-                        status = "⚪ SKIP"
-                    elif in_zone:
-                        status = "🔴 TOUCH"
-                    elif abs(diff_pct) <= 0.5:
-                        status = "🟡 가까움"
-                    elif (z["type"] == "short" and h4_trend == "up") or (z["type"] == "long" and h4_trend == "down"):
-                        status = "⛔ 역행"
-                    else:
-                        status = "⚫ 대기"
-
-                    rows.append({
-                        "방향": z["type"].upper(),
-                        "Tier": z["tier"],
-                        "Mult": f"{z['tier_mult_final']:.2f}x",
-                        "RP": int(z["run_potential"]),
-                        "Zone Low": format(z["zone_low"], price_fmt),
-                        "Zone High": format(z["zone_high"], price_fmt),
-                        "Score": f"{z['eff_score']:.1f}",
-                        "거리%": f"{diff_pct:+.2f}%",
-                        "상태": status,
-                    })
-
-                st.dataframe(rows, use_container_width=True, hide_index=True)
-
-            except Exception as e:
-                st.error(f"{symbol}: {e}")
-
-    except Exception as e:
-        st.error(f"Zone 표시 실패: {e}")
-
-    st.divider()
-
+                price = float(ex.get_last_price(category="linear", symbol=symbol))
+            except Exception:
+                price = None
+        rows = []
+        near_cnt = 0
+        for a in armed:
+            ent = float(a["entry"])
+            dist = (abs(price - ent) / ent * 100.0) if price else None
+            near = (dist is not None and dist <= near_pct)
+            imminent = (dist is not None and dist <= 0.4)
+            if near:
+                near_cnt += 1
+            if only_near.startswith("진입") and not near:
+                continue
+            rows.append({
+                "우선": a.get("priority"),
+                "방향": a["side"],
+                "setup": str(a.get("setup", ""))[:28],
+                "진입가": round(ent, 6),
+                "SL": round(float(a["sl"]), 6),
+                "risk%": a.get("risk_pct_tier_adjusted"),
+                "거리%": (round(dist, 2) if dist is not None else None),
+                "상태": "🔴터치임박" if imminent else ("🟡근처" if near else "대기"),
+                "zone": f"[{a['zone_low']:.6g}, {a['zone_high']:.6g}]",
+            })
+        total_near += near_cnt
+        header = f"**{symbol}** — 무장 {len(armed)}개"
+        if price:
+            header += f" · 현재가 {price:g}"
+        header += f" · 근처 {near_cnt}개"
+        st.markdown(header)
+        if rows:
+            import pandas as _pd
+            rows.sort(key=lambda r: (r["거리%"] if isinstance(r["거리%"], (int, float)) else 1e9, r["우선"] if r["우선"] is not None else 999))
+            st.dataframe(_pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        elif only_near.startswith("진입"):
+            st.caption("  진입 임박 존 없음 (현재가 근처에 무장존 없음)")
+    if only_near.startswith("진입"):
+        st.info(f"🎯 진입 임박(근처 {near_pct}%) 총 {total_near}개 — 🔴는 엣지 ±0.4%(터치 시 즉시 진입). "
+                "무장존 총수가 많아도 실제 진입은 현재가 근처(터치)만 됩니다.")
 
 def render_file_paths() -> None:
     with st.expander("파일 경로 확인"):
