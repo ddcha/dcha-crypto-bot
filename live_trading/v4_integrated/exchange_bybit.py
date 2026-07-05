@@ -89,6 +89,29 @@ class BybitExchange:
     def place_market_order(self, category: str, symbol: str, side: str, qty: float, reduce_only: bool = False) -> Dict[str, Any]:
         return self.session.place_order(category=category, symbol=symbol, side=side, orderType="Market", qty=str(qty), timeInForce="IOC", reduceOnly=reduce_only)
 
+    def place_limit_entry_order(self, category: str, symbol: str, side: str, qty: float, price: float,
+                                order_link_id: str = None) -> Dict[str, Any]:
+        """★무장존 진입용 지정가(신규진입, reduceOnly=False, GTC). 존 경계가에 거치 → 터치 시 체결."""
+        kwargs = dict(category=category, symbol=symbol, side=side, orderType="Limit",
+                      qty=str(qty), price=str(price), timeInForce="GTC", reduceOnly=False)
+        if order_link_id:
+            kwargs["orderLinkId"] = order_link_id
+        return self._call_with_retry(self.session.place_order, **kwargs)
+
+    def cancel_order(self, category: str, symbol: str, order_id: str = None, order_link_id: str = None) -> Dict[str, Any]:
+        kwargs = dict(category=category, symbol=symbol)
+        if order_id:
+            kwargs["orderId"] = order_id
+        if order_link_id:
+            kwargs["orderLinkId"] = order_link_id
+        return self._call_with_retry(self.session.cancel_order, **kwargs)
+
+    def get_open_orders(self, category: str, symbol: str = None) -> Dict[str, Any]:
+        kwargs = dict(category=category)
+        if symbol:
+            kwargs["symbol"] = symbol
+        return self._call_with_retry(self.session.get_open_orders, **kwargs)
+
     def place_reduce_only_limit_order(
         self,
         category: str,
