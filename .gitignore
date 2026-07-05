@@ -70,3 +70,4 @@ live_trading/live_v4/KILL
 live_trading/v4_integrated/armed_cache.json
 live_trading/v4_integrated/arm_worker.log
 live_trading/v4_integrated/__pycache__/
+live_trading/v4_integrated/.env

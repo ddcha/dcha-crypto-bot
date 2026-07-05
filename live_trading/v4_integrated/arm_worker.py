@@ -86,7 +86,25 @@ def _run_once(syms, loader):
     cache = compute(syms, loader=loader)
     write_cache(cache)
     tot = sum(len(v.get("armed", [])) for v in cache.values())
-    print(f"[arm] 완료: {len(syms)}심볼 무장 총 {tot}개 → {OUT} ({time.time()-t0:.0f}s)")
+    took = time.time() - t0
+    print(f"[arm] 완료: {len(syms)}심볼 무장 총 {tot}개 → {OUT} ({took:.0f}s)")
+    # ★텔레그램 요약 (기존 telegram_utils, env 토큰 있을 때만)
+    try:
+        from telegram_utils import send_telegram_message, telegram_enabled
+        if telegram_enabled():
+            lines = [f"🎯 무장존 갱신 ({len(syms)}심볼, {took:.0f}s)"]
+            for s in syms:
+                v = cache.get(s, {}); arm = v.get("armed", [])
+                if arm:
+                    t = arm[0]
+                    lines.append(f"• {s}: {len(arm)}개 | p0 {t['side']} {t['setup'][:22]} @{t['entry']:g} r{t['risk_pct_tier_adjusted']}%")
+                elif v.get("reason"):
+                    lines.append(f"• {s}: 0 ({v['reason']})")
+                else:
+                    lines.append(f"• {s}: 0")
+            send_telegram_message("\n".join(lines))
+    except Exception as _te:
+        print(f"[arm] 텔레그램 알림 실패(무시): {_te}")
 
 
 def main():

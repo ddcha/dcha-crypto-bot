@@ -23,9 +23,17 @@ python control_panel.py     # ← 기존처럼 여기서 API 키·모드(demo/li
 ```
 (env 로도 가능: `BYBIT_DEMO_API_KEY/SECRET` 또는 `BYBIT_LIVE_API_KEY/SECRET`)
 
+## 텔레그램 알림 (이미 연동됨 — 토큰만)
+0703 인프라 그대로 연동돼 있음(주문·체결·러너·청산·에러 알림 + 워커 무장존 요약). `.env` 에 토큰만 넣으면 켜짐:
+```bash
+cp .env.example .env       # TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID 채우기
+```
+- 봇토큰: @BotFather / chat_id: @userinfobot. `TELEGRAM_ALERTS_ENABLED=0` 이면 끔.
+- 워커가 H4마다 "🎯 무장존 갱신: BTC 5개, SOL 9개..." 요약 전송.
+
 ## 실행
 ```bash
-pip install pybit pandas numpy pyarrow python-dotenv
+pip install pybit pandas numpy pyarrow python-dotenv requests
 bash run_live.sh          # 워커(배경) + 메인 함께 기동 (키는 컨트롤패널 live_settings.json 에서 읽음)
 ```
 - 워커 로그: `arm_worker.log`. 최초 full-gen ~15분(9심볼) 후 `armed_cache.json` 생성 → 그때부터 메인이 진입.
