@@ -1,0 +1,26 @@
+[Unit]
+Description=Armed-zone worker (H4마다 무장존 계산 → armed_cache.json)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=linuxuser
+Group=linuxuser
+# ★배포 경로에 맞게 수정 (bybit-bot.service 와 동일 폴더)
+WorkingDirectory=/home/linuxuser/bybit_bot
+
+# H4 경계마다 full-히스토리 무장존 재계산(거래소 최신봉 merge). 별 프로세스라 메인 루프 안 막음.
+ExecStart=/home/linuxuser/bybit_bot/venv/bin/python /home/linuxuser/bybit_bot/arm_worker.py --loop --live
+
+Restart=on-failure
+RestartSec=30s
+CPUQuota=90%
+StandardOutput=journal
+StandardError=journal
+Environment="PYTHONUNBUFFERED=1"
+Environment="STAGE4D_DLCACHE=./data_cache"
+Environment="ARMED_CACHE=./armed_cache.json"
+
+[Install]
+WantedBy=multi-user.target

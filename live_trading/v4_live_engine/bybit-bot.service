@@ -1,0 +1,33 @@
+[Unit]
+Description=Bybit SMC v4 Armed-Zone Trading Bot (main via watchdog)
+After=network-online.target
+Wants=network-online.target
+StartLimitBurst=3
+StartLimitIntervalSec=600
+
+[Service]
+Type=simple
+User=linuxuser
+Group=linuxuser
+# ★배포 경로에 맞게 수정 (v4_live_engine 내용을 여기로 복사)
+WorkingDirectory=/home/linuxuser/bybit_bot
+
+# systemd → engine_watchdog.py → main.py(자식). control-group kill 로 함께 종료(좀비 방지).
+ExecStart=/home/linuxuser/bybit_bot/venv/bin/python /home/linuxuser/bybit_bot/engine_watchdog.py
+
+KillMode=control-group
+KillSignal=SIGTERM
+SendSIGKILL=yes
+TimeoutStopSec=30
+FinalKillSignal=SIGKILL
+Delegate=yes
+Restart=on-failure
+RestartSec=15s
+CPUQuota=80%
+StandardOutput=journal
+StandardError=journal
+Environment="PYTHONUNBUFFERED=1"
+Environment="ARMED_CACHE=./armed_cache.json"
+
+[Install]
+WantedBy=multi-user.target

@@ -39,9 +39,21 @@ bash run_live.sh          # 워커(배경) + 메인 함께 기동 (키는 컨트
 - 워커 로그: `arm_worker.log`. 최초 full-gen ~15분(9심볼) 후 `armed_cache.json` 생성 → 그때부터 메인이 진입.
 - 캐시 없으면 메인은 **진입 안 함**(안전). 워커는 H4 경계마다 자동 재계산.
 
-## 개별 실행 (systemd 등)
+## systemd 배포 (Vultr 등) — 2 서비스
+0703과 동일하게 **watchdog→main** + **워커** 별 서비스 (좀비/재시작 안전망 유지).
 ```bash
-STAGE4D_DLCACHE=./data_cache python arm_worker.py --loop --live   # 워커만 (별 프로세스)
+# 폴더 내용을 서버(예 /home/linuxuser/bybit_bot)로 복사 후:
+sudo cp bybit-bot.service arm-worker.service /etc/systemd/system/
+#   ↑ 두 서비스파일의 WorkingDirectory·ExecStart 경로를 실제 배포경로로 수정
+sudo systemctl daemon-reload
+sudo systemctl enable --now arm-worker.service   # 워커 (H4마다 무장존 계산)
+sudo systemctl enable --now bybit-bot.service    # 메인 (watchdog→main)
+sudo journalctl -u arm-worker -u bybit-bot -f    # 로그
+```
+
+## 개별 실행 (수동/systemd 대신)
+```bash
+STAGE4D_DLCACHE=./data_cache python arm_worker.py --loop --live   # 워커만
 python main.py                                                    # 메인만
 ```
 
