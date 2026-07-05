@@ -7,8 +7,12 @@ export PYTHONUTF8=1
 export STAGE4D_DLCACHE="./data_cache"          # 워커 full-히스토리 시드 (폴더 내 parquet)
 export ARMED_CACHE="./armed_cache.json"
 
-# API 키(env). demo 소액부터: BYBIT_DEMO_API_KEY/SECRET. 실계좌: BYBIT_LIVE_API_KEY/SECRET.
-: "${BYBIT_DEMO_API_KEY:?demo 키 필요 (export BYBIT_DEMO_API_KEY=... ) 또는 실계좌 키 설정}"
+# API 키: 기존과 동일하게 **컨트롤패널**(control_panel.py → live_settings.json)에서 입력한 키 사용.
+#   워커·메인 둘 다 live_settings.json 우선 → env 폴백, 모드(live/demo)도 패널 설정 따름.
+#   (env 로 줘도 됨: BYBIT_DEMO_API_KEY/SECRET 또는 BYBIT_LIVE_API_KEY/SECRET)
+if [ ! -f live_settings.json ] && [ -z "$BYBIT_DEMO_API_KEY$BYBIT_LIVE_API_KEY$BYBIT_API_KEY" ]; then
+  echo "[run] 경고: live_settings.json(컨트롤패널) 도 env 키도 없음. control_panel.py 로 키 입력하거나 env 설정 필요."
+fi
 
 echo "[run] 배경 워커 기동 (H4마다 무장존 → armed_cache.json)"
 python -u arm_worker.py --loop --live > arm_worker.log 2>&1 &

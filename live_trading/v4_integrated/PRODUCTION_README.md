@@ -15,15 +15,18 @@
 | `combo_risk_table.json` `setups_btc_triple_a3v4.json` | risk테이블·42규칙 |
 | `run_live.sh` | ★런처 (워커+메인 함께 기동) |
 
+## API 키 — 기존과 동일 (컨트롤패널)
+**기존처럼 컨트롤패널로 키를 입력하면 그대로 됩니다.** 워커·메인 둘 다 `live_settings.json` 우선 → env 폴백,
+모드(live/demo)도 패널 설정을 따릅니다(제가 credential 경로는 안 건드림).
+```bash
+python control_panel.py     # ← 기존처럼 여기서 API 키·모드(demo/live) 입력 → live_settings.json 저장
+```
+(env 로도 가능: `BYBIT_DEMO_API_KEY/SECRET` 또는 `BYBIT_LIVE_API_KEY/SECRET`)
+
 ## 실행
 ```bash
 pip install pybit pandas numpy pyarrow python-dotenv
-
-# API 키 (env). 소액 테스트는 demo 부터:
-export BYBIT_DEMO_API_KEY="..."; export BYBIT_DEMO_API_SECRET="..."
-# 실계좌: export BYBIT_LIVE_API_KEY / BYBIT_LIVE_API_SECRET
-
-bash run_live.sh          # 워커(배경) + 메인 함께 기동
+bash run_live.sh          # 워커(배경) + 메인 함께 기동 (키는 컨트롤패널 live_settings.json 에서 읽음)
 ```
 - 워커 로그: `arm_worker.log`. 최초 full-gen ~15분(9심볼) 후 `armed_cache.json` 생성 → 그때부터 메인이 진입.
 - 캐시 없으면 메인은 **진입 안 함**(안전). 워커는 H4 경계마다 자동 재계산.

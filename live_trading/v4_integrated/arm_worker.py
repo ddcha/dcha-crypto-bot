@@ -97,13 +97,27 @@ def main():
     if "--live" in sys.argv:   # 거래소 최신봉 merge (data_cache 시드). klines=공개데이터.
         from config import CATEGORY
         from exchange_bybit import BybitExchange
-        dk, ds = os.getenv("BYBIT_DEMO_API_KEY", ""), os.getenv("BYBIT_DEMO_API_SECRET", "")
-        if dk and ds:
-            ex = BybitExchange(dk, ds, use_demo=True)            # demo 우선(소액 테스트)
+        # ★main 과 동일 소스: 컨트롤패널(live_settings.json) 우선 → env 폴백. 모드(live/demo)도 패널 따름.
+        from settings_store import load_live_settings, get_api_settings, get_mode
+        _st = load_live_settings(); _api = get_api_settings(_st); _mode = get_mode(_st)
+
+        def _sv(x):
+            return (x or "").strip()
+        if _mode == "live":
+            key = _sv(_api.get("live_api_key")) or _sv(os.getenv("BYBIT_LIVE_API_KEY")) or _sv(os.getenv("BYBIT_API_KEY"))
+            sec = _sv(_api.get("live_api_secret")) or _sv(os.getenv("BYBIT_LIVE_API_SECRET")) or _sv(os.getenv("BYBIT_API_SECRET"))
+            use_demo = False
         else:
-            ex = BybitExchange(os.getenv("BYBIT_LIVE_API_KEY", "") or os.getenv("BYBIT_API_KEY", ""),
-                               os.getenv("BYBIT_LIVE_API_SECRET", "") or os.getenv("BYBIT_API_SECRET", ""), use_demo=False)
-        loader = make_live_loader(ex, CATEGORY)
+            key = _sv(_api.get("demo_api_key")) or _sv(os.getenv("BYBIT_DEMO_API_KEY")) or _sv(os.getenv("BYBIT_API_KEY"))
+            sec = _sv(_api.get("demo_api_secret")) or _sv(os.getenv("BYBIT_DEMO_API_SECRET")) or _sv(os.getenv("BYBIT_API_SECRET"))
+            use_demo = True
+        if not key or not sec:
+            print("[arm] API 키 없음(컨트롤패널 live_settings.json 또는 env) — data_cache 만으로 계산")
+            loader = _load
+        else:
+            print(f"[arm] --live: {'DEMO' if use_demo else 'LIVE'} 모드 (컨트롤패널 설정 따름)")
+            ex = BybitExchange(key, sec, use_demo=use_demo)
+            loader = make_live_loader(ex, CATEGORY)
     if "--loop" in sys.argv:
         print("[arm] --loop: H4 경계마다 무장존 재계산")
         while True:
