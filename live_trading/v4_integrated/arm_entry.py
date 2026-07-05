@@ -56,3 +56,36 @@ def match_fill_to_armed(symbol: str, filled_link_id: str, armed_list: list) -> d
         if link_id(symbol, a) == filled_link_id:
             return a
     return None
+
+
+def armed_signal_on_touch(armed_list: list, current_price: float, cache_ts=None) -> dict:
+    """★현재가가 무장존을 터치하면 그 존(우선순위 최고)으로 entry_signal 호환 dict 반환.
+       main 의 기존 시장가 진입 흐름(build_managed_position/SL·TP)에 drop-in.
+       터치 = zone_low <= price <= zone_high. 백테는 우선순위(scored_active) 최상단 진입."""
+    if not current_price or current_price <= 0:
+        return {"should_enter": False, "reason": "no_price"}
+    touched = [a for a in armed_list if float(a["zone_low"]) <= current_price <= float(a["zone_high"])]
+    if not touched:
+        return {"should_enter": False, "reason": "no_armed_touch"}
+    a = min(touched, key=lambda x: int(x.get("priority", 999)))     # 최우선 존
+    ent = float(a["entry"]); sl = float(a["sl"])
+    return {
+        "should_enter": True,
+        "timestamp": str(cache_ts or a.get("entry_time", "")),
+        "side": a["side"], "position_side": a.get("position_side", "long" if a["side"] == "Buy" else "short"),
+        "entry": ent, "base_entry": ent, "sl": sl,
+        "qty": float(a["qty"]), "notional": float(a.get("notional", 0.0)),
+        "risk_per_unit": float(a.get("risk_per_unit", abs(ent - sl))),
+        "risk_pct_base": float(a.get("risk_pct_base", 0.0)), "risk_pct_tier_adjusted": float(a.get("risk_pct_tier_adjusted", 0.0)),
+        "setup": a.get("setup", ""), "btc_zone": a.get("btc_zone"), "score": float(a.get("score", 0.0)), "base_score": float(a.get("score", 0.0)),
+        "grade": str(a.get("grade", "C")), "run_potential": int(a.get("run_potential", 0)), "run_tags": [],
+        "tp_plan": a.get("tp_plan"), "tp_plan_name": a.get("tp_plan_name", "base"), "expansion_state": bool(a.get("expansion_state", False)),
+        "zone_low": float(a["zone_low"]), "zone_high": float(a["zone_high"]),
+        "entry_refined": False, "refined_entry_px": None, "refine_tag": "",
+        # ── 기존 main 계약 호환 중립필드 (v4 tier/sentiment 미사용) ──
+        "tier": "V4", "tier_mult": 1.0, "tier_mult_raw": 1.0, "rp_action": "v4",
+        "stage4j_mult": 1.0, "stage4j_label": "v4", "sentiment_mult": 1.0, "sentiment_label": "v4",
+        "tier_pre_total": 0, "tier_sweep_count": 0, "tier_fvg_count": 0, "tier_ob_count": 0, "tier_wick_ratio_5": None,
+        "reasons": [a.get("setup", "")], "atoms_dict": a.get("atoms_dict", {}),
+        "armed_priority": int(a.get("priority", 0)), "n_armed_touched": len(touched),
+    }

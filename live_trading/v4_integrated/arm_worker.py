@@ -55,15 +55,65 @@ def write_cache(cache, out=OUT):
     os.replace(tmp, out)   # 원자적 교체 (메인이 읽는 중 깨짐 방지)
 
 
+def make_live_loader(exchange, category):
+    """★라이브 로더: data_cache(full 히스토리 시드) + 거래소 최신봉(200개) merge → 항상 최신 full."""
+    from config import H4_INTERVAL, H1_INTERVAL
+    imap = {"4h": H4_INTERVAL, "1h": H1_INTERVAL, "15m": "15", "1m": "1"}
+
+    def loader(sym, tf, data_dir=DATA):
+        base = _load(sym, tf, data_dir)
+        try:
+            recent = exchange.get_recent_klines_df(category=category, symbol=sym, interval=imap.get(tf, tf), limit=200)
+            return pd.concat([base, recent], ignore_index=True).drop_duplicates("timestamp").sort_values("timestamp").reset_index(drop=True)
+        except Exception as e:
+            print(f"[arm] {sym} {tf} 최신봉 fetch 실패, data_cache 만 사용: {e}")
+            return base
+    return loader
+
+
+def _sleep_to_next_h4(margin_sec=90):
+    """다음 H4 경계(00/04/08/12/16/20 UTC) + margin 까지 대기 (거래소 확정봉 반영 여유)."""
+    import datetime as _dt
+    now = _dt.datetime.now(_dt.timezone.utc)
+    nb = now.replace(minute=0, second=0, microsecond=0) + _dt.timedelta(hours=(4 - now.hour % 4))
+    wait = (nb - now).total_seconds() + margin_sec
+    print(f"[arm] 다음 H4 경계까지 {wait/60:.1f}분 대기 (다음 {nb.isoformat()})")
+    time.sleep(max(30, wait))
+
+
+def _run_once(syms, loader):
+    t0 = time.time()
+    cache = compute(syms, loader=loader)
+    write_cache(cache)
+    tot = sum(len(v.get("armed", [])) for v in cache.values())
+    print(f"[arm] 완료: {len(syms)}심볼 무장 총 {tot}개 → {OUT} ({time.time()-t0:.0f}s)")
+
+
 def main():
     syms = SYMBOLS
     if "--syms" in sys.argv:
         syms = sys.argv[sys.argv.index("--syms") + 1].split(",")
-    t0 = time.time()
-    cache = compute(syms)
-    write_cache(cache)
-    tot = sum(len(v.get("armed", [])) for v in cache.values())
-    print(f"[arm] 완료: {len(syms)}심볼 무장 총 {tot}개 → {OUT} ({time.time()-t0:.0f}s)")
+    loader = _load
+    if "--live" in sys.argv:   # 거래소 최신봉 merge (data_cache 시드). klines=공개데이터.
+        from config import CATEGORY
+        from exchange_bybit import BybitExchange
+        dk, ds = os.getenv("BYBIT_DEMO_API_KEY", ""), os.getenv("BYBIT_DEMO_API_SECRET", "")
+        if dk and ds:
+            ex = BybitExchange(dk, ds, use_demo=True)            # demo 우선(소액 테스트)
+        else:
+            ex = BybitExchange(os.getenv("BYBIT_LIVE_API_KEY", "") or os.getenv("BYBIT_API_KEY", ""),
+                               os.getenv("BYBIT_LIVE_API_SECRET", "") or os.getenv("BYBIT_API_SECRET", ""), use_demo=False)
+        loader = make_live_loader(ex, CATEGORY)
+    if "--loop" in sys.argv:
+        print("[arm] --loop: H4 경계마다 무장존 재계산")
+        while True:
+            try:
+                _run_once(syms, loader)
+            except Exception as e:
+                import traceback; print(f"[arm] 사이클 오류: {e}\n{traceback.format_exc()}")
+            _sleep_to_next_h4()
+    else:
+        _run_once(syms, loader)
 
 
 if __name__ == "__main__":

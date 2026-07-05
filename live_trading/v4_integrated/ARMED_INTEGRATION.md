@@ -20,24 +20,29 @@
                     build_managed_position(기존) → 나머지 arm 지정가 취소 → 기존 SL·TP 관리
 ```
 
-## 남은 배선 (main.py 훅업) — 진입부(현재 시장가, ~2620-2760) 교체
-1. **워커 상시 실행**: `python arm_worker.py --loop` 를 별도 프로세스/systemd 로 (26분 gen 이 메인 루프 안 막게). watchdog 은 워커 gen 유예.
-2. **진입 루프 교체** (심볼별):
-   ```python
-   from arm_entry import load_armed_cache, plan_armed_orders, match_fill_to_armed
-   ac = load_armed_cache("armed_cache.json", symbol)
-   price = exchange.get_last_price(CATEGORY, symbol)
-   open_arm = [o for o in exchange.get_open_orders(CATEGORY, symbol)... if orderLinkId.startswith("arm-")]
-   has_pos = symbol in managed_positions or (open_positions_map.get(symbol) has_position)
-   plan = plan_armed_orders(symbol, ac["armed"], price, ZONE_PROXIMITY_PCT, {existing link_ids}, has_pos, max_orders=3)
-   for lid in plan["cancel"]: exchange.cancel_order(CATEGORY, symbol, order_link_id=lid)
-   for p in plan["place"]:
-       exchange.place_limit_entry_order(CATEGORY, symbol, p["side"], p["qty"], p["entry"], order_link_id=p["link_id"])
-   ```
-3. **체결 → 포지션관리**: 포지션 감지 시, 그 심볼 arm 주문 중 사라진(체결된) link_id 를 찾아 `match_fill_to_armed` →
-   payload(entry/sl/qty/setup/tp_plan/risk)로 `build_managed_position(...)` 호출 후 managed_positions 등록 →
-   나머지 arm 지정가 전취소. 이후 SL/TP/트레일링은 기존 `manage_open_positions` 그대로.
-4. **잔고 주입**: 워커 `ARM_BALANCE` 또는 워커가 exchange 잔고 조회.
+## ✅ 배선 완료 (구현됨) — 터치 시장가 방식
+main.py 진입부(generate_entry_signal 시장가 즉시신호)를 **무장캐시 터치신호**로 교체(main.py ~2600).
+기존 주문/체결동기화/build_managed_position/SL·TP 흐름 **100% 재사용** → money-code 위험 최소.
+```python
+_ac = load_armed_cache("armed_cache.json", symbol)                       # 워커 캐시
+entry_signal = armed_signal_on_touch(_ac["armed"], current_price)        # 현재가가 터치한 무장존(우선순위0)
+# → should_enter 시 실잔고로 qty 재계산(min(base*rm,15%)) → 기존 시장가 진입 흐름 그대로
+```
+- **존은 백테와 동일하게 미리 무장돼 대기**(28/28 재현). 가격이 존 경계 터치 시 그 존으로 시장가 진입.
+- 슬리피지: 터치 시장가는 존 엣지 근처 체결(갭분석상 92.4% 정확·7.6% 유리) → 실질 손해 없음.
+
+## 실행 (run model)
+```bash
+# 1) 배경 워커: H4마다 무장존 재계산 → armed_cache.json (별도 프로세스/systemd)
+python arm_worker.py --loop --live      # --live=거래소 최신봉 merge, --loop=H4 경계 반복
+# 2) 메인: armed_cache 읽어 터치 진입 + 기존 포지션관리
+python main.py
+```
+watchdog: 워커 gen(~15분/9심볼)은 별도 프로세스라 main 루프·watchdog 안 막음.
+
+## (향후) 정밀도 업그레이드 — 순수 지정가
+`arm_entry.plan_armed_orders` + `exchange.place_limit_entry_order/cancel_order` 로 존 경계에 **지정가 거치**(터치 시장가 대신).
+체결가 정확·봉간 체결 가능. 단 비동기 체결감지(match_fill_to_armed→build_managed_position) 배선 필요. 컴포넌트 준비완료, 훅업만 남음.
 
 ## 확인된 정합 사항
 - **우선순위**: armed[0]=백테 최우선(scored_active 정렬). 근처 무장 여러 개면 우선순위순 최대 N개 거치.

@@ -2597,20 +2597,30 @@ def main() -> None:
                     )
                     print(f"{symbol} current price: {current_price}")
 
-                    entry_signal = generate_entry_signal(
-                        df_h4_raw=df_h4,
-                        df_h1_raw=df_h1,
-                        balance=balance,
-                        risk_pct=float(asset_cfg["risk_pct"]),
-                        fee_rate=FEE_RATE,
-                        max_notional_mult=MAX_NOTIONAL_MULT,
-                        current_price=current_price,
-                        last_exit_time_iso=symbol_state.get("last_exit_time"),
-                        last_exit_side=symbol_state.get("last_exit_side"),
-                        risk_multiplier=float(portfolio.get("risk_multiplier", 1.0)),
-                        df_1m_raw=df_1m,
-                        symbol=symbol,
-                    )
+                    # ★무장존 파리티(2026-07-05): 배경워커(arm_worker)가 H4마다 계산한 armed_cache 에서
+                    #   현재가가 터치한 무장존(우선순위 최고)으로 진입. 존은 백테와 동일하게 미리 무장돼 대기(28/28 재현검증).
+                    #   generate_entry_signal(현재봉 즉시 시장가신호)을 대체 — 하류 주문/체결/포지션관리 흐름은 그대로.
+                    from arm_entry import load_armed_cache, armed_signal_on_touch
+                    from smc_stage4d.simulation import calc_position_size as _calc_qty
+                    _ac = load_armed_cache(os.environ.get("ARMED_CACHE", "armed_cache.json"), symbol)
+                    entry_signal = armed_signal_on_touch(_ac.get("armed", []), current_price, cache_ts=_ac.get("timestamp"))
+                    entry_signal["n_armed"] = len(_ac.get("armed", []))
+                    entry_signal["armed_computed_at"] = _ac.get("computed_at")
+                    if _ac.get("stale"):
+                        entry_signal["should_enter"] = False
+                        entry_signal["reason"] = "armed_cache_missing"
+                    if entry_signal.get("should_enter"):
+                        # ★실잔고로 qty 재계산 (워커 qty 는 placeholder 잔고 기준). generate_entry_signal 과 동일: min(base*rm, 15%).
+                        _base = float(entry_signal.get("risk_pct_base", 0.0))
+                        _rm = float(portfolio.get("risk_multiplier", 1.0)) or 1.0
+                        _final = min(_base * _rm, 15.0)
+                        _q, _notl, _ = _calc_qty(balance, _final, float(entry_signal["entry"]), float(entry_signal["sl"]), FEE_RATE, MAX_NOTIONAL_MULT)
+                        entry_signal["risk_pct_tier_adjusted"] = _final
+                        if _q and _q > 0:
+                            entry_signal["qty"] = float(_q); entry_signal["notional"] = float(_notl)
+                        else:
+                            entry_signal["should_enter"] = False
+                            entry_signal["reason"] = "position_size_zero"
 
                     pretty_print_json(f"LIVE SIGNAL RESULT - {symbol}", entry_signal)
 
