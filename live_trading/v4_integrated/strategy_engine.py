@@ -190,3 +190,59 @@ def generate_entry_signal(df_h4_raw, df_h1_raw, balance, risk_pct, fee_rate, max
         "reasons": [setup], "atoms_dict": {k: bool(v) for k, v in tags.items() if k.startswith("a_")},
         "hours_to_expiry": round(hrs, 1),
     }
+
+
+def get_armed_zones(df_h4_raw, df_h1_raw, balance, risk_pct, fee_rate, max_notional_mult,
+                    risk_multiplier=1.0, symbol=None):
+    """★무장존 목록 (지정가 거치용). 현재봉(E)에서 '전 게이트 통과·터치 대기' 존 전부를
+       setup·risk%·qty·tp_plan·우선순위(백테 scored_active 순서) 부착해 반환.
+       검증: 백테 각 트레이드가 진입봉에 정확히 무장(28/28, entry·sl Δ0.00%).
+       라이브: 이 목록으로 존 경계에 지정가 거치 → 터치 시 체결(off-by-bar 없음)."""
+    _init()
+    import smc_stage4d.simulation as sim
+    from smc_stage4d.structures import apply_indicators_and_build
+    from smc_stage4d.simulation import calc_position_size, get_tp_plan
+    if len(df_h4_raw) < 260 or len(df_h1_raw) < 420:
+        return {"armed": [], "reason": "not_enough_data"}
+    df_h4 = df_h4_raw.copy(); df_h4["timestamp"] = pd.to_datetime(df_h4["timestamp"], utc=True)
+    df_h1 = df_h1_raw.copy(); df_h1["timestamp"] = pd.to_datetime(df_h1["timestamp"], utc=True)
+    df_h4 = df_h4.sort_values("timestamp").reset_index(drop=True); df_h1 = df_h1.sort_values("timestamp").reset_index(drop=True)
+    real_last_ts = pd.Timestamp(df_h4["timestamp"].iloc[-1])
+    arm_bar = len(df_h4) - 1                                   # ★E=마지막 실봉 (패딩 뒤에 붙음 → 신호봉=E-1=백테와 동일)
+    sim.USE_COMBO_UNION = True; sim.COMBO_UNION_ATOMSETS = _ATOMSETS
+    prepared = apply_indicators_and_build({"symbol": symbol or "SYM", "df_raw": _pad(df_h4, 30, 4), "df_h1_raw": _pad(df_h1, 120, 1)})
+    r = sim.generate_candidates_from_prepared(prepared, _arm_bar=arm_bar, _stop_at=arm_bar + 1)
+    raw = r.get("armed", [])
+    hrs = _hours_to_monthly_expiry(real_last_ts)
+    if hrs <= _EXPIRY_BLOCK_HOURS:
+        return {"armed": [], "reason": "expiry_block", "hours_to_expiry": round(hrs, 1)}
+    ts_zone = np.datetime64((real_last_ts + pd.Timedelta(hours=4)).tz_convert("UTC").tz_localize(None))
+    zone = _btc_zone(ts_zone)
+    rm = float(risk_multiplier) if risk_multiplier and float(risk_multiplier) > 0 else 1.0
+    out = []
+    for a in raw:                                             # raw = scored_active 우선순위 순
+        side = str(a["side"])
+        setup = _attribute_setup(lambda x, _a=a: bool(_a["atoms"].get(x, False)), zone, side)
+        if setup is None:
+            continue
+        base_risk = float(_RISK.get(setup, {"applied_risk_pct": 0.0}).get("applied_risk_pct", 0.0))
+        if base_risk <= 0:                                    # 24·25 제거 조합
+            continue
+        final_risk = min(base_risk * rm, _HARD_MAX_RISK_PCT)
+        ent = float(a["entry"]); sl = float(a["sl"])
+        qty, notional, _ = calc_position_size(balance, final_risk, ent, sl, fee_rate, max_notional_mult)
+        if qty is None or qty <= 0:
+            continue
+        plan = dict(a["tp_plan"]) if isinstance(a.get("tp_plan"), dict) else get_tp_plan(bool(a.get("expansion_state", False)))
+        out.append({
+            "side": "Buy" if side == "long" else "Sell", "position_side": side,
+            "entry": ent, "sl": sl, "qty": float(qty), "notional": float(notional),
+            "risk_per_unit": abs(ent - sl), "risk_pct_base": base_risk, "risk_pct_tier_adjusted": final_risk,
+            "zone_low": float(a["zone_low"]), "zone_high": float(a["zone_high"]),
+            "setup": setup, "btc_zone": zone, "grade": str(a.get("grade", "C")), "score": float(a.get("score", 0.0)),
+            "tp_plan_name": plan.get("name", "base"), "tp_plan": plan, "expansion_state": bool(a.get("expansion_state", False)),
+            "priority": len(out),                            # ★백테 선택 우선순위(0=최우선)
+            "atoms_dict": {k: bool(v) for k, v in a["atoms"].items() if k.startswith("a_")},
+        })
+    return {"armed": out, "timestamp": str(real_last_ts), "btc_zone": zone,
+            "hours_to_expiry": round(hrs, 1), "n_raw": len(raw)}
