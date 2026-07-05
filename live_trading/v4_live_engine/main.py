@@ -2240,6 +2240,27 @@ def _is_price_near_any_zone(price: float, light_zones: list, proximity_pct: floa
     return False, None
 
 
+def _is_price_near_any_armed(price: float, armed_list: list, proximity_pct: float) -> tuple:
+    """★B안(2026-07-06): 핫판정 = armed_cache(진입 소스오브트루스) 엣지 근접 여부.
+    가격이 armed 엣지(진입가) 중 하나라도 ±proximity_pct% 이내면 (True, 최근접 armed) 반환.
+    진입 트리거(entry ±0.4%)보다 넓게(기본 0.5%) 잡아 터치 직전 심볼을 hot 으로 승격 →
+    구형 light-zone(심볼당 1~8개)이 armed(8~191개)의 부분집합이라 터치를 놓치던 파리티버그 제거."""
+    margin = proximity_pct / 100.0
+    best = None
+    best_d = None
+    for a in armed_list:
+        try:
+            e = float(a["entry"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if e <= 0:
+            continue
+        d = abs(price - e) / e
+        if d <= margin and (best_d is None or d < best_d):
+            best, best_d = a, d
+    return (best is not None), best
+
+
 def main() -> None:
     print("프로그램 시작 - 기준 엔진 반영 실거래 실행 버전")
 
@@ -2445,6 +2466,12 @@ def main() -> None:
                     print(f"[zone cache] refresh done in {_refresh_dur:.1f}s, failed={len(_failed_symbols)}")
 
                 # === [Step 2] Light loop: 가격 polling 으로 hot symbols 식별 ===
+                # ★B안(2026-07-06): 핫판정 기준을 구형 light-zone → armed_cache(진입 소스오브트루스)로 교체.
+                #   light-zone(심볼당 1~8개)과 armed(8~191개)이 서로 다른 탐지기라, armed 존이 가격 근처인데
+                #   light-zone 엔 없어 심볼이 스킵되던 파리티버그(라이브가 백테보다 진입 덜함) 제거.
+                #   이제 "현재가가 armed 엣지 ±ZONE_PROXIMITY_PCT(0.5%) 이내"면 hot → SYMBOL LOOP 진입.
+                from arm_entry import load_armed_cache as _load_armed_cache
+                _armed_cache_path = os.environ.get("ARMED_CACHE", "armed_cache.json")
                 _hot_symbols = []
                 _current_prices = {}
                 for _sym, _cfg in assets.items():
@@ -2460,13 +2487,13 @@ def main() -> None:
                     except Exception as _pe:
                         print(f"  [price] {_sym}: failed - {_pe}")
                         continue
-                    _light_zones = zone_cache_full.get(_sym, {}).get("light_zones", [])
-                    if not _light_zones:
+                    _armed = _load_armed_cache(_armed_cache_path, _sym).get("armed", [])
+                    if not _armed:
                         continue
-                    _is_hot, _matched_zone = _is_price_near_any_zone(_price, _light_zones, ZONE_PROXIMITY_PCT)
+                    _is_hot, _matched_armed = _is_price_near_any_armed(_price, _armed, ZONE_PROXIMITY_PCT)
                     if _is_hot:
                         _hot_symbols.append(_sym)
-                        print(f"  [HOT] {_sym} price={_price} near zone {_matched_zone['zone_low']:.4f}~{_matched_zone['zone_high']:.4f} ({_matched_zone['type']})")
+                        print(f"  [HOT] {_sym} price={_price} near armed edge {float(_matched_armed['entry']):.6g} ({_matched_armed.get('side')}/prio{_matched_armed.get('priority')})")
 
                 # === [Step 3] Pickle cache 저장 (control_panel read 용) ===
                 _save_zone_cache_to_pickle(zone_cache_full, _current_prices)
