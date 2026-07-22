@@ -1,0 +1,5 @@
+﻿risk,engine,final_usd,CAGR_pct,m_geo_pct,MDD_pct,PF,taken,skipped,avg_conc,peak_conc,m_win_pct,n_months
+1%/trade,v3(고정TP),813220,178.6,9.03,-11.9,1.73,1123,0,2.5,9,82,52
+1%/trade,v4(trailing),152506,86.2,5.46,-11.8,1.56,1131,0,2.4,7,71,53
+2%/trade,v3(고정TP),44146761,606.4,17.96,-23.5,1.58,1123,0,2.5,9,82,52
+2%/trade,v4(trailing),1670717,221.5,10.53,-22.5,1.43,1131,0,2.4,7,71,53
