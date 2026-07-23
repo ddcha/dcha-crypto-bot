@@ -58,20 +58,22 @@ def match_fill_to_armed(symbol: str, filled_link_id: str, armed_list: list) -> d
     return None
 
 
-TOUCH_EDGE_BAND = 0.004   # ★진입가(존 엣지) ±0.4% 안에서만 트리거. 백테 fill=존 엣지와 일치.
+TOUCH_EDGE_BAND = 0.004   # (구 엣지밴드 — 트리거엔 미사용, 참조용 보존)
 
 
 def armed_signal_on_touch(armed_list: list, current_price: float, cache_ts=None) -> dict:
-    """★현재가가 무장존 '엣지(진입가)' 근처면 그 존(우선순위 최고)으로 entry_signal 호환 dict 반환.
+    """★현재가가 무장존 범위 [zone_low, zone_high] 안이면 그 존(우선순위 최고)으로 entry_signal 호환 dict 반환.
        main 의 기존 시장가 진입 흐름(build_managed_position/SL·TP)에 drop-in.
-       ★트리거 = |price - entry| <= 0.4% (존 안 아무데나 X — 백테는 엣지에서 체결. 깊숙이 들어간
-       stale/잘못된가격 진입 방지). 백테 우선순위(scored_active) 최상단 진입."""
+       ★존-바운드 트리거(2026-07-06): 백테 touched=(high>=zone_low and low<=zone_high)와 동일 판정.
+       시장가 유지하되 방향성 확보 — short(entry=zone_low)는 엣지 이상, long(entry=zone_high)는 엣지
+       이하에서만 발화 → 구조적으로 유리쪽만 체결(과거 abs()±0.4% 양방향 밴드의 불리 오발 제거).
+       백테 우선순위(scored_active) 최상단 진입."""
     if not current_price or current_price <= 0:
         return {"should_enter": False, "reason": "no_price"}
     touched = [a for a in armed_list
-               if abs(current_price - float(a["entry"])) <= TOUCH_EDGE_BAND * float(a["entry"])]
+               if float(a["zone_low"]) <= current_price <= float(a["zone_high"])]
     if not touched:
-        return {"should_enter": False, "reason": "no_armed_touch_at_edge"}
+        return {"should_enter": False, "reason": "no_armed_touch_in_zone"}
     a = min(touched, key=lambda x: int(x.get("priority", 999)))     # 최우선 존
     ent = float(a["entry"]); sl = float(a["sl"])
     return {

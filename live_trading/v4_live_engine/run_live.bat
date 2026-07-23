@@ -27,5 +27,5 @@ timeout /t 30 >nul
 goto waitcache
 
 :runmain
-echo [run] 메인 루프 기동
-python -u main.py
+echo [run] 메인 루프 기동 (주간회전 래퍼 경유 - main_console.log)
+python -u run_main_logged.py
