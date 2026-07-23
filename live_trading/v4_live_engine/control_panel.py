@@ -454,6 +454,15 @@ def render_main_controls(live_settings: Dict[str, Any], runtime_state: Dict[str,
         risk_multiplier = float(portfolio.get("risk_multiplier", 1.0))
         orderbook_limit = int(execution.get("orderbook_limit", 50))
         poll_fill_timeout_sec = int(execution.get("poll_fill_timeout_sec", 8))
+        # ★v6 균일 리스크 선택 (2/1.5/1%, 기본 2%). >0 이면 combo_risk_table 무시하고 균일 적용.
+        _risk_opts = [2.0, 1.5, 1.0]
+        _cur_uniform = float(portfolio.get("uniform_risk_pct", 2.0))
+        _idx = _risk_opts.index(_cur_uniform) if _cur_uniform in _risk_opts else 0
+        uniform_risk_pct = st.selectbox(
+            "리스크 % (균일, 기본 2%)", _risk_opts, index=_idx,
+            format_func=lambda x: f"{x:.1f}%",
+            help="v6 균일 리스크. combo_risk_table 무시하고 모든 진입에 이 리스크% 적용. 소액테스트 2%, 시드 성장 시 1%로 축소 권장.",
+        )
         position_management_enabled = st.toggle(
             "Position Management Enabled",
             value=bool(protection.get("position_management_enabled", True)),
@@ -494,6 +503,7 @@ def render_main_controls(live_settings: Dict[str, Any], runtime_state: Dict[str,
     system["trading_enabled"] = trading_enabled
     portfolio["max_open_positions"] = int(max_open_positions)
     portfolio["risk_multiplier"] = float(risk_multiplier)  # ⭐ v1.9_BASELINE
+    portfolio["uniform_risk_pct"] = float(uniform_risk_pct)  # ★v6 균일 리스크% (2/1.5/1)
     # 합산 리스크 제한 제거됨 (v1.9b 티어 매핑으로 인해)
     if "max_total_risk_pct" in portfolio:
         del portfolio["max_total_risk_pct"]

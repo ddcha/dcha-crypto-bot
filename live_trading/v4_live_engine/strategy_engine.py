@@ -24,6 +24,26 @@ from strategy_engine_legacy import (
 # ── 확정 v4 파라미터 ──
 _ENGINE_ENV = {"OB_MODE": "engulf", "DISP_ATR_MULT": "1.3", "USE_H1_REFINE": "1", "HONEST_STAGE": "5", "MIN_SCORE": "7.5"}
 _G = 1.2; _EXPIRY_BLOCK_HOURS = 36; _HARD_MAX_RISK_PCT = 15.0   # ★기준조건(2026-07-04): 만기 48→36h, 캡 2→15%(120% 3조합만 실효 타깃)
+
+# ── v6 오버레이 (2026-07-23) ──
+#   EXIT_SCHEME=v6 : 청산 = BT15·3(부분익절 없음·BE@1.5R·트레일@3R, 풀포지션). v4는 부분익절 25/20/15%.
+#   UNIFORM_RISK_PCT>0 : combo_risk_table 무시하고 모든 진입에 균일 리스크%(기본 2.0). 0이면 기존 combo table.
+#   ★함수 호출마다 env 재조회(worker 가 import 후 env 세팅해도 반영되게 — module-level 캐시 금지).
+def _exit_scheme():
+    return os.environ.get("EXIT_SCHEME", "v4").lower()
+
+
+def _uniform_risk_pct():
+    try:
+        return float(os.environ.get("UNIFORM_RISK_PCT", "0") or "0")
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _v6_plan():
+    """v6 청산 plan — 부분익절 없음(풀포지션), BE@1.5R, 3R 트레일. main.py 가 tp_plan.get 으로 읽음."""
+    return {"name": "v6", "targets": [], "runner_frac": 1.0,
+            "trail_activate_rr": 3.0, "be_after_rr": 1.5, "max_hold_bars": 12}
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _RULES = None; _ATOMSETS = None; _RISK = None; _ORIG = None; _READY = False
 _BTS = None; _BDIST = None; _LAST_TAGS = {}
@@ -226,14 +246,23 @@ def get_armed_zones(df_h4_raw, df_h1_raw, balance, risk_pct, fee_rate, max_notio
         if setup is None:
             continue
         base_risk = float(_RISK.get(setup, {"applied_risk_pct": 0.0}).get("applied_risk_pct", 0.0))
-        if base_risk <= 0:                                    # 24·25 제거 조합
+        if base_risk <= 0:                                    # 24·25 제거 조합 (0%차단 유지 = v6 프레임)
             continue
-        final_risk = min(base_risk * rm, _HARD_MAX_RISK_PCT)
+        # ★v6: 균일리스크(combo table 무시). UNIFORM_RISK_PCT>0 이면 균일, 아니면 기존 combo table.
+        _urp = _uniform_risk_pct()
+        if _urp > 0:
+            final_risk = min(_urp * rm, _HARD_MAX_RISK_PCT)
+        else:
+            final_risk = min(base_risk * rm, _HARD_MAX_RISK_PCT)
         ent = float(a["entry"]); sl = float(a["sl"])
-        qty, notional, _ = calc_position_size(balance, final_risk, ent, sl, fee_rate, max_notional_mult)
+        qty, _rpu, notional = calc_position_size(balance, final_risk / 100.0, ent, sl, fee_rate, max_notional_mult)  # ★applied_risk_pct=퍼센트 → 소수(/100); 언팩 (qty,rpu,notional) 순서 교정
         if qty is None or qty <= 0:
             continue
-        plan = dict(a["tp_plan"]) if isinstance(a.get("tp_plan"), dict) else get_tp_plan(bool(a.get("expansion_state", False)))
+        # ★v6: 청산 plan = BT15·3. v4는 기존 부분익절 plan.
+        if _exit_scheme() == "v6":
+            plan = _v6_plan()
+        else:
+            plan = dict(a["tp_plan"]) if isinstance(a.get("tp_plan"), dict) else get_tp_plan(bool(a.get("expansion_state", False)))
         out.append({
             "side": "Buy" if side == "long" else "Sell", "position_side": side,
             "entry": ent, "sl": sl, "qty": float(qty), "notional": float(notional),

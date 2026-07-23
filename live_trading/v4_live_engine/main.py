@@ -56,7 +56,7 @@ from settings_store import (
     get_api_settings,
     get_mode,
 )
-from log_store import log_system_event, log_trade_event, upsert_trade_journal
+from log_store import log_system_event, log_trade_event, upsert_trade_journal, close_trade_journal
 from telegram_utils import send_telegram_message
 
 
@@ -611,6 +611,74 @@ def calc_actual_stop_from_fill(side: str, filled_price: float, signal_risk_per_u
     return filled_price + signal_risk_per_unit
 
 
+def structural_sl_from_signal(signal_payload: dict | None) -> float | None:
+    """★#4 구조SL 정책(2026-07-06): SL 은 armed payload 의 구조 SL 고정(체결가 기반 X).
+       백테 SL 은 존 구조에서 나오지 체결가에서 안 나온다 → 파리티. mp risk_per_unit 은
+       build_managed_position 이 |실체결가 − 구조SL| 로 도출(백테 r_multiple 계산과 동일)."""
+    if not isinstance(signal_payload, dict):
+        return None
+    sl = safe_float(signal_payload.get("sl"), 0.0)
+    return float(sl) if sl > 0 else None
+
+
+def finalize_closed_position(symbol: str, mp: dict, exit_reason: str,
+                             exit_price: float | None = None, tp1_hit: bool | None = None) -> None:
+    """★항목2 청산마감 일원화(2026-07-07): 모든 청산경로가 이 함수로 → managed_position_removed
+       trade_log + close_trade_journal(realized R) 보장. 저널 영구 open 구멍 방지."""
+    try:
+        if tp1_hit is None:
+            tp1_hit = bool(mp.get("tp1_done", False) or mp.get("tp1_exchange_done", False))
+        _rpu = float(mp.get("risk_per_unit", 0.0) or 0.0)
+        _ent = float(mp.get("entry_price", 0.0) or 0.0)
+        _px = float(exit_price) if exit_price else mp.get("current_stop")   # 실체결가 미확보 시 마지막 SL가 근사
+        realized_r = None
+        if _rpu > 0 and _ent > 0 and _px:
+            _dir = 1.0 if str(mp.get("side", "")) == "Buy" else -1.0
+            realized_r = round(_dir * (float(_px) - _ent) / _rpu, 3)
+        log_trade_event(
+            event_type="managed_position_removed", symbol=symbol,
+            side=str(mp.get("side", "")), signal_ts=str(mp.get("signal_ts", "")),
+            reason=exit_reason,
+            extra={"tp1_hit": tp1_hit, "exit_price_approx": _px,
+                   "risk_per_unit": _rpu, "realized_r_approx": realized_r},
+        )
+        close_trade_journal(symbol, str(mp.get("signal_ts", "")),
+                            {"exit_reason": exit_reason, "tp1_hit": tp1_hit,
+                             "exit_price_approx": _px, "realized_r_approx": realized_r})
+    except Exception as _e:
+        print(f"[finalize-close] {symbol} 청산 마감 실패: {_e}")
+
+
+_worker_liveness_last_alert = [0.0]   # 모듈 상태(스팸억제용)
+
+
+def check_worker_liveness(cache_path: str, stale_hours: float = 5.0, realert_hours: float = 4.0) -> None:
+    """★항목4(2026-07-07): armed_cache computed_at 이 stale_hours 초과면 텔레그램 경보(워커 사망 방치 방지).
+       load_armed_cache 의 5h stale 차단은 '진입 안 함=안전'이나 알림이 없어 조용히 방치되던 문제 보강.
+       스팸억제: 경보 후 realert_hours 간격으로만 재알림."""
+    try:
+        d = json.load(open(cache_path, encoding="utf-8"))
+        ca = d.get("computed_at")
+        if not ca:
+            return
+        ca_dt = datetime.fromisoformat(str(ca))
+        if ca_dt.tzinfo is None:
+            ca_dt = ca_dt.replace(tzinfo=timezone.utc)
+        age_h = (datetime.now(timezone.utc) - ca_dt).total_seconds() / 3600.0
+        if age_h > stale_hours:
+            _now = time.time()
+            if _now - _worker_liveness_last_alert[0] > realert_hours * 3600:
+                send_telegram_message(
+                    f"🔴 ARM WORKER STALE\narmed_cache computed_at: {ca}\n"
+                    f"경과: {age_h:.1f}시간 (>{stale_hours}h) — 워커 사망 의심, 확인 필요.\n"
+                    f"(캐시 스테일이라 신규 진입은 안전 차단 중)"
+                )
+                _worker_liveness_last_alert[0] = _now
+                print(f"[worker-liveness] STALE 경보 발송: computed_at={ca}, {age_h:.1f}h")
+    except Exception as _e:
+        print(f"[worker-liveness] 체크 실패: {_e}")
+
+
 
 
 def get_tp_target_price(entry_price: float, risk_per_unit: float, side: str, target_rr: float) -> float:
@@ -758,12 +826,38 @@ def handle_tp1_exchange_fill(
     if order_id:
         try:
             status = exchange.get_order_fill_status(category=category, symbol=symbol, order_id=order_id)
-        except Exception:
+        except Exception as _st_e:
             status = None
+            log_system_event(event_type="tp1_status_query_error", symbol=symbol,
+                             message=str(_st_e), extra={"order_id": order_id})
 
     order_confirmed_filled = False
     if isinstance(status, dict):
         if status.get("found", False) and not status.get("is_open", False) and status.get("is_filled", False):
+            order_confirmed_filled = True
+
+    # ★항목1(2026-07-07): order_id 조회가 체결 확인 못했는데 qty는 줄었으면 진단로그 + open-orders 대조.
+    #   원인규명: get_order_fill_status 가 왜 Filled 를 못 봤는지 응답을 남긴다(found/is_open/is_filled/status).
+    if order_id and (not order_confirmed_filled) and qty_fallback_triggered:
+        _oo_absent = None   # TP1 주문이 미체결목록에 없나 (= 체결됨/취소됨)
+        try:
+            _oo = exchange.get_open_orders(category=category, symbol=symbol)
+            _ids = []
+            if isinstance(_oo, dict):
+                _lst = (_oo.get("result", {}) or {}).get("list", _oo.get("list", [])) or []
+                _ids = [str(o.get("orderId", "")) for o in _lst if isinstance(o, dict)]
+            _oo_absent = order_id not in _ids
+        except Exception as _oo_e:
+            log_system_event(event_type="tp1_open_orders_query_error", symbol=symbol, message=str(_oo_e))
+        log_system_event(
+            event_type="tp1_fill_reconcile_diag", symbol=symbol,
+            message="order_id 조회 미확정 but qty감소 — open-orders 대조",
+            extra={"order_id": order_id, "fill_status": status,
+                   "qty_reduced": float(original_qty) - float(current_qty),
+                   "order_absent_from_open": _oo_absent},
+        )
+        # ★대조 확정: 미체결목록에 없고(=체결/취소) + qty가 TP1분만큼 줄었으면 → 거래소 체결로 확정(fallback 아님)
+        if _oo_absent is True:
             order_confirmed_filled = True
 
     # order_id 체결 확인되지도 않았고, qty fallback 도 아닌 경우 종료
@@ -1230,7 +1324,11 @@ def build_managed_position(
         "slippage_pct": float(slippage_pct) if slippage_pct is not None else None,
         "initial_sl": float(actual_sl) if actual_sl is not None else None,
         "current_stop": float(actual_sl) if actual_sl is not None else None,
-        "risk_per_unit": float(signal_risk_per_unit) if signal_risk_per_unit > 0 else 0.0,
+        # ★#4(2026-07-06): rpu = |실체결가 − 구조SL| (actual_sl=구조SL 전달 시). 백테 r_multiple 과 동일 기준.
+        #   엣지 정체결이면 계획 rpu와 동일, 유리하게 벗어난 체결만 차이나며 그 방식이 백테와 같아짐.
+        "risk_per_unit": (abs(float(filled_price) - float(actual_sl))
+                          if (filled_price is not None and actual_sl is not None)
+                          else (float(signal_risk_per_unit) if signal_risk_per_unit > 0 else 0.0)),
         "original_qty": float(order_qty),
         "remaining_qty_est": float(order_qty),
         "signal_ts": str(signal_ts),
@@ -1320,10 +1418,14 @@ def sync_existing_managed_position_with_exchange(mp: dict, actual: dict, signal_
         if signal_risk_per_unit > 0:
             old_initial_sl = mp.get("initial_sl")
             old_current_stop = mp.get("current_stop")
-            new_initial_sl = calc_actual_stop_from_fill(side, actual_entry, signal_risk_per_unit)
+            # ★#4(2026-07-06): 구조SL 고정 + rpu=|실체결가−구조SL|
+            new_initial_sl = structural_sl_from_signal(signal_payload)
+            if new_initial_sl is None:
+                new_initial_sl = calc_actual_stop_from_fill(side, actual_entry, signal_risk_per_unit)
 
             mp["entry_price"] = float(actual_entry)
-            mp["risk_per_unit"] = float(signal_risk_per_unit)
+            mp["risk_per_unit"] = (abs(float(actual_entry) - float(new_initial_sl))
+                                   if new_initial_sl is not None else float(signal_risk_per_unit))
             mp["initial_sl"] = float(new_initial_sl) if new_initial_sl is not None else None
 
             if old_current_stop is None:
@@ -1382,6 +1484,10 @@ def rebuild_managed_positions_from_exchange(
                 sym_state["last_exit_side"] = mp.get("side", "")
                 sym_state["last_exit_reason"] = "closed_after_tp1_no_cooldown"
                 print(f"[COOLDOWN] {symbol} closed AFTER TP1 -> no cooldown (re-entry allowed)")
+            # ★#3(2026-07-06): 청산 로깅 보강 — 기존 pop-only 경로가 저널 close·trade_log exit 를 안 남겨
+            #   저널이 영구 open 으로 남던 구멍 봉합(월손익·평가 집계 근거).
+            # ★항목2(2026-07-07): 청산 마감 일원화 헬퍼로 (managed_position_removed + 저널 close)
+            finalize_closed_position(symbol, mp, sym_state.get("last_exit_reason", "closed"), tp1_hit=tp1_hit)
             managed_positions.pop(symbol, None)
             _clear_recovery_failed_notify(symbol)  # ★ [PATCHED 2026-06-04] 청산 시 스로틀 초기화
             continue
@@ -1503,7 +1609,9 @@ def rebuild_managed_positions_from_exchange(
             signal_side = str(signal_payload.get("side", ""))
             if signal_side == actual_side:
                 signal_risk_per_unit = get_signal_risk_per_unit(signal_payload)
-                actual_sl = calc_actual_stop_from_fill(actual_side, actual_entry, signal_risk_per_unit) if actual_entry else None
+                actual_sl = structural_sl_from_signal(signal_payload)  # ★#4 구조SL 고정
+                if actual_sl is None and actual_entry:
+                    actual_sl = calc_actual_stop_from_fill(actual_side, actual_entry, signal_risk_per_unit)
 
                 managed_positions[symbol] = build_managed_position(
                     symbol=symbol,
@@ -1781,11 +1889,8 @@ def manage_open_positions(
                         extra={"response": cancel_resp},
                     )
 
-            log_trade_event(
-                event_type="managed_position_removed",
-                symbol=symbol,
-                reason="position_not_found_on_exchange",
-            )
+            # ★항목2(2026-07-07): 이 경로도 저널 close 보장 (기존엔 managed_position_removed만 발행, 저널 open 잔존)
+            finalize_closed_position(symbol, mp, "position_not_found_on_exchange")
             send_telegram_message(
                 f"⚪ POSITION CLOSED DETECTED\n"
                 f"Symbol: {symbol}\n"
@@ -1903,6 +2008,8 @@ def manage_open_positions(
                         f"RR: {rr:.2f}\n"
                         f"Reason: time_exit_max_hold_bars"
                     )
+                    # ★항목2(2026-07-07): 시간청산도 저널 close 보장 (3번째 청산경로 — 기존엔 position_time_exit만 발행)
+                    finalize_closed_position(symbol, mp, "time_exit_max_hold_bars", exit_price=current_price)
                     symbols_to_remove.append(symbol)
                     continue
             except Exception:
@@ -2048,9 +2155,25 @@ def manage_open_positions(
             )
 
         if mp.get("runner_active", False):
+            # ★v6 (2026-07-23): tp_plan.name=='v6' 이면 트레일 = peak−1R (백테 BT15·3 동일 공식).
+            #   running peak(최고 rr)을 mp['peak_rr']에 추적 → stop = entry ± (peak−1)×risk_per_unit.
+            #   부분익절 없이 풀포지션이므로 v4 샹들리에 대신 peak−1R 사용.
+            _is_v6 = str((mp.get("tp_plan") or {}).get("name", "")).lower() == "v6"
+            if _is_v6:
+                _prev_peak = float(mp.get("peak_rr", 0.0))
+                _peak = max(_prev_peak, float(rr))
+                mp["peak_rr"] = _peak
+                if _peak >= trail_activate_rr:   # 3R 이후에만 트레일 (그전엔 BE@1.5 유지)
+                    _lock_rr = _peak - 1.0       # peak−1R
+                    if side == "Buy":
+                        trailing_stop = entry_price + _lock_rr * risk_per_unit
+                    else:
+                        trailing_stop = entry_price - _lock_rr * risk_per_unit
+                else:
+                    trailing_stop = None
             # ★기준조건(2026-07-04): 트레일링 = 백테 엔진 트레일(직전봉 range중점−0.10×H4ATR).
             #   TRAIL_MODE="rratchet" 로 두면 구 R래칫 사용(롤백용).
-            if TRAIL_MODE == "backtest":
+            elif TRAIL_MODE == "backtest":
                 try:
                     _ph, _pl, _atr = _last_closed_h4_for_trail(exchange, category, symbol)
                     trailing_stop = calc_backtest_trail_stop(side, entry_price, _ph, _pl, _atr)
@@ -2250,14 +2373,19 @@ def _is_price_near_any_armed(price: float, armed_list: list, proximity_pct: floa
     best_d = None
     for a in armed_list:
         try:
-            e = float(a["entry"])
+            zlo = float(a["zone_low"])
+            zhi = float(a["zone_high"])
         except (KeyError, TypeError, ValueError):
             continue
-        if e <= 0:
+        if zlo <= 0 or zhi <= 0:
             continue
-        d = abs(price - e) / e
-        if d <= margin and (best_d is None or d < best_d):
-            best, best_d = a, d
+        # ★존-바운드 프리필터(2026-07-06): 존 범위 ±margin 안이면 hot — arm_entry 트리거와 정합.
+        #   존이 두꺼워도(엣지에서 먼 지점) 놓치지 않게 존 전체를 커버(+여유).
+        if zlo * (1 - margin) <= price <= zhi * (1 + margin):
+            mid = 0.5 * (zlo + zhi)
+            d = abs(price - mid) / mid if mid else 0.0
+            if best_d is None or d < best_d:
+                best, best_d = a, d
     return (best is not None), best
 
 
@@ -2472,6 +2600,7 @@ def main() -> None:
                 #   이제 "현재가가 armed 엣지 ±ZONE_PROXIMITY_PCT(0.5%) 이내"면 hot → SYMBOL LOOP 진입.
                 from arm_entry import load_armed_cache as _load_armed_cache
                 _armed_cache_path = os.environ.get("ARMED_CACHE", "armed_cache.json")
+                check_worker_liveness(_armed_cache_path)   # ★항목4: 워커 사망(캐시 5h+ 스테일) 텔레그램 경보
                 _hot_symbols = []
                 _current_prices = {}
                 for _sym, _cfg in assets.items():
@@ -2641,7 +2770,7 @@ def main() -> None:
                         _base = float(entry_signal.get("risk_pct_base", 0.0))
                         _rm = float(portfolio.get("risk_multiplier", 1.0)) or 1.0
                         _final = min(_base * _rm, 15.0)
-                        _q, _notl, _ = _calc_qty(balance, _final, float(entry_signal["entry"]), float(entry_signal["sl"]), FEE_RATE, MAX_NOTIONAL_MULT)
+                        _q, _rpu, _notl = _calc_qty(balance, _final / 100.0, float(entry_signal["entry"]), float(entry_signal["sl"]), FEE_RATE, MAX_NOTIONAL_MULT)  # ★_final=퍼센트 → 소수(/100); 언팩 (qty,rpu,notional) 순서 교정
                         entry_signal["risk_pct_tier_adjusted"] = _final
                         if _q and _q > 0:
                             entry_signal["qty"] = float(_q); entry_signal["notional"] = float(_notl)
@@ -2816,11 +2945,10 @@ def main() -> None:
                             filled_price=filled_price,
                         )
 
-                        actual_sl = calc_actual_stop_from_fill(
-                            side=signal_side,
-                            filled_price=filled_price,
-                            signal_risk_per_unit=signal_risk_per_unit,
-                        )
+                        # ★#4(2026-07-06): SL = armed payload 구조SL 고정 (fill+rpu 폐기). rpu 는 build_managed_position 이 |fill−구조SL| 로.
+                        actual_sl = structural_sl_from_signal(entry_signal)
+                        if actual_sl is None:   # 폴백: 구조SL 없으면 기존 방식
+                            actual_sl = calc_actual_stop_from_fill(side=signal_side, filled_price=filled_price, signal_risk_per_unit=signal_risk_per_unit)
 
                         managed_pos = build_managed_position(
                             symbol=symbol,

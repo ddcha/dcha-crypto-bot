@@ -107,10 +107,29 @@ def _run_once(syms, loader):
         print(f"[arm] 텔레그램 알림 실패(무시): {_te}")
 
 
+def _apply_panel_risk_settings():
+    """컨트롤패널(live_settings/runtime_state)의 uniform_risk_pct·exit_scheme 을 env로 주입.
+       strategy_engine 이 _UNIFORM_RISK_PCT·_EXIT_SCHEME 로 읽음. 없으면 기본(2%·v4청산)."""
+    try:
+        from settings_store import load_live_settings
+        st = load_live_settings()
+        pf = st.get("portfolio", {}) if isinstance(st, dict) else {}
+        urp = pf.get("uniform_risk_pct")
+        if urp is not None and float(urp) > 0:
+            os.environ["UNIFORM_RISK_PCT"] = str(float(urp))
+        es = pf.get("exit_scheme")
+        if es:
+            os.environ["EXIT_SCHEME"] = str(es).lower()
+        print(f"[arm] 리스크설정: UNIFORM_RISK_PCT={os.environ.get('UNIFORM_RISK_PCT','(combo)')} EXIT_SCHEME={os.environ.get('EXIT_SCHEME','v4')}")
+    except Exception as e:
+        print(f"[arm] 패널 리스크설정 로드 실패(기본 사용): {e}")
+
+
 def main():
     syms = SYMBOLS
     if "--syms" in sys.argv:
         syms = sys.argv[sys.argv.index("--syms") + 1].split(",")
+    _apply_panel_risk_settings()
     loader = _load
     if "--live" in sys.argv:   # 거래소 최신봉 merge (data_cache 시드). klines=공개데이터.
         from config import CATEGORY
