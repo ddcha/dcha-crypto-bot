@@ -27,10 +27,10 @@ v6.1 = v6(청산 BT15·3 + 48h max_hold + 만기36h컷 + 0%차단 + 균일리스
 ## 실행
 
 ```
-python run_v6_backtest.py                # 균일 2% (기본), 빠른경로
-python run_v6_backtest.py --risk 1.5     # 균일 1.5%
-python run_v6_backtest.py --risk 1.0     # 균일 1%
-python run_v6_backtest.py --regen        # 진입 재생성(완전체, 원시→후보, ~20분)
+python run_v6.1_backtest.py                # 균일 2% (기본), 빠른경로
+python run_v6.1_backtest.py --risk 1.5     # 균일 1.5%
+python run_v6.1_backtest.py --risk 1.0     # 균일 1%
+python run_v6.1_backtest.py --regen        # 진입 재생성(완전체, 원시→후보, ~20분)
 ```
 
 - **빠른경로(기본)**: 동봉 `trades_v4.csv`(엔진 walkforward 진입셋)에 v6 프레임+청산 적용. 수초.
@@ -51,11 +51,10 @@ python run_v6_backtest.py --regen        # 진입 재생성(완전체, 원시→
 ## 폴더 구조
 
 ```
-run_v6_backtest.py                 메인 (자기완결)
-smc_stage4d/                       엔진 코어 11모듈 (진입 재생성)
+run_v6.1_backtest.py                 메인 (자기완결)
+smc_stage4d/                       엔진 코어 9모듈(v6.1 실사용, 레거시 __main__·reporting 제거) (진입 재생성)
 rules/
   setups_btc_triple_a3v4.json      v4 42룰 (라이브 동일)
-  setups_btc_triple_a3.json        a3 룰 (참고)
   combo_risk_table.json            0%차단 판정용 (라이브 동일)
 data/
   data_cache/                      4h/1h/15m parquet (27) — 지표/구조체

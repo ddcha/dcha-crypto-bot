@@ -5,7 +5,7 @@
         + 균일 리스크(기본 2%, --risk 로 변경).
    진입 재생성: prepared_cache_2022.pkl(동봉) → 엔진 후보 재생성(원시 4h/1h부터). trades_v4.csv 는 파리티 대조용.
    청산: raw_1m(동봉) entry+4h 1m 정직체결.
-   실행: python run_v6_backtest.py [--risk 2.0] [--regen]
+   실행: python run_v6.1_backtest.py [--risk 2.0] [--regen]
      --risk R : 균일 리스크%(기본 2.0). 1.5/1.0 등.
      --regen  : 진입을 prepared 캐시로 재생성(완전체). 생략시 동봉 trades_v4.csv 사용(빠른경로).
    환경: Python 3.10+, pip install pandas numpy pyarrow
