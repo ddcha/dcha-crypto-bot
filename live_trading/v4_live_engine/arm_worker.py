@@ -36,15 +36,67 @@ def compute(symbols=SYMBOLS, data_dir=DATA, balance=BALANCE, loader=_load):
             h4 = loader(sym, "4h", data_dir)
             h1 = loader(sym, "1h", data_dir).tail(H1_RECENT).reset_index(drop=True)
             r = SE.get_armed_zones(h4, h1, balance, RISK_PCT, FEE, MAXN, symbol=sym)
-            cache[sym] = {"timestamp": r.get("timestamp"), "hours_to_expiry": r.get("hours_to_expiry"),
-                          "btc_zone": r.get("btc_zone"), "n_raw": r.get("n_raw", 0),
-                          "armed": r.get("armed", []), "reason": r.get("reason"),
-                          "h4_last": str(h4["timestamp"].iloc[-1]), "sec": round(time.time() - t0, 1)}
+            cache[sym] = _build_entry(sym, r, h4, t0)
             print(f"[arm] {sym}: 무장 {len(cache[sym]['armed'])}개 (raw {cache[sym]['n_raw']}) {cache[sym]['sec']}s")
         except Exception as e:
             cache[sym] = {"error": str(e), "armed": []}
             print(f"[arm] {sym} ERROR: {e}")
     return cache
+
+
+def _build_entry(sym, r, h4, t0):
+    return {"timestamp": r.get("timestamp"), "hours_to_expiry": r.get("hours_to_expiry"),
+            "btc_zone": r.get("btc_zone"), "n_raw": r.get("n_raw", 0),
+            "armed": r.get("armed", []), "reason": r.get("reason"),
+            "h4_last": str(h4["timestamp"].iloc[-1]), "sec": round(time.time() - t0, 1)}
+
+
+# ── 병렬 무장 계산 (심볼 독립·결정론적 → armed_cache 비트동일, 벽시계만 단축) ──
+# set_btc_regime 은 전역상태라 워커별 1회 init. 데이터 로드(네트워크/IO)는 메인에서 수행 후
+# CPU 무거운 get_armed_zones 만 워커로 넘긴다(live loader=exchange객체 는 pickle 불가하므로).
+_WORKER_BTC_H4 = None
+
+
+def _pool_init(btc_h4):
+    global _WORKER_BTC_H4
+    import strategy_engine as _SE
+    _SE._init()
+    _SE.set_btc_regime(btc_h4)
+    _WORKER_BTC_H4 = btc_h4
+
+
+def _arm_task(payload):
+    sym, h4, h1, balance = payload
+    import strategy_engine as _SE
+    t0 = time.time()
+    try:
+        r = _SE.get_armed_zones(h4, h1, balance, RISK_PCT, FEE, MAXN, symbol=sym)
+        return sym, _build_entry(sym, r, h4, t0)
+    except Exception as e:
+        return sym, {"error": str(e), "armed": []}
+
+
+def compute_parallel(symbols=SYMBOLS, data_dir=DATA, balance=BALANCE, loader=_load, workers=None):
+    """compute() 의 병렬판. 결과는 순차와 동일(심볼 독립). 워커는 CPU계산만, 데이터로드는 메인."""
+    import multiprocessing as mp
+    btc_h4 = loader("BTCUSDT", "4h", data_dir)   # 레짐용 + 워커 init 시드
+    payloads = []
+    for sym in symbols:                          # 로드는 메인(라이브 loader=exchange 는 여기서만 사용)
+        h4 = loader(sym, "4h", data_dir)
+        h1 = loader(sym, "1h", data_dir).tail(H1_RECENT).reset_index(drop=True)
+        payloads.append((sym, h4, h1, balance))
+    if workers is None:
+        workers = int(os.environ.get("ARM_WORKERS", "0")) or min(len(symbols), max(1, (os.cpu_count() or 2)))
+    cache = {}
+    ctx = mp.get_context("spawn")               # Windows/파리티 일관 (fork 상속 부작용 배제)
+    with ctx.Pool(processes=workers, initializer=_pool_init, initargs=(btc_h4,)) as pool:
+        for sym, entry in pool.imap_unordered(_arm_task, payloads):
+            cache[sym] = entry
+            if "error" in entry:
+                print(f"[arm] {sym} ERROR: {entry['error']}")
+            else:
+                print(f"[arm] {sym}: 무장 {len(entry['armed'])}개 (raw {entry['n_raw']}) {entry['sec']}s [par]")
+    return {s: cache[s] for s in symbols if s in cache}   # SYMBOLS 순서로 정렬(JSON 안정)
 
 
 def write_cache(cache, out=OUT):
@@ -83,7 +135,15 @@ def _sleep_to_next_h4(margin_sec=90):
 
 def _run_once(syms, loader):
     t0 = time.time()
-    cache = compute(syms, loader=loader)
+    _parallel = os.environ.get("ARM_PARALLEL", "1") != "0"
+    if _parallel:
+        try:
+            cache = compute_parallel(syms, loader=loader)
+        except Exception as e:
+            import traceback; print(f"[arm] 병렬 실패, 순차 폴백: {e}\n{traceback.format_exc()}")
+            cache = compute(syms, loader=loader)
+    else:
+        cache = compute(syms, loader=loader)
     write_cache(cache)
     tot = sum(len(v.get("armed", [])) for v in cache.values())
     took = time.time() - t0
