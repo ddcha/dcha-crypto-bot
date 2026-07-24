@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """★배경 무장존 워커 — H4 마감마다 1회 실행. 심볼별 full-히스토리(2022~)로 무장존 계산 → armed_cache.json.
-   메인 루프는 이 캐시를 읽어 존 경계에 지정가 거치(main 배선). 계산 155s/심볼 × 9 = ~23분/H4(4h 여유).
+   메인 루프는 이 캐시를 읽어 존 경계에 지정가 거치(main 배선).
+   계산: 9심볼 병렬(compute_parallel, spawn Pool) ~4.6분/H4. (구 순차 ~18분 → 4배, 파리티 비트동일.)
+   경계 직후 이 시간만큼 신규존 미가용 = 재무장 블라인드 창. 병렬화로 18분→4.6분 축소.
    히스토리 소스: 기본 data_cache(로컬 parquet, 라이브서버에 동봉). 라이브 증분은 exchange fetch 로 append(옵션).
    실행: python arm_worker.py            (1회 계산 후 종료)
          python arm_worker.py --loop     (H4 경계 감지해 반복)
