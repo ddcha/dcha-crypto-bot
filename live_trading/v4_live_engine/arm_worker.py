@@ -91,6 +91,10 @@ def compute_parallel(symbols=SYMBOLS, data_dir=DATA, balance=BALANCE, loader=_lo
         workers = int(os.environ.get("ARM_WORKERS", "0")) or min(len(symbols), max(1, (os.cpu_count() or 2)))
     cache = {}
     ctx = mp.get_context("spawn")               # Windows/파리티 일관 (fork 상속 부작용 배제)
+    _pyw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")   # 워커 콘솔창 안뜨게(pythonw)
+    if os.path.exists(_pyw):
+        try: ctx.set_executable(_pyw)
+        except Exception: pass
     with ctx.Pool(processes=workers, initializer=_pool_init, initargs=(btc_h4,)) as pool:
         for sym, entry in pool.imap_unordered(_arm_task, payloads):
             cache[sym] = entry
@@ -110,18 +114,42 @@ def write_cache(cache, out=OUT):
 
 
 def make_live_loader(exchange, category):
-    """★라이브 로더: data_cache(full 히스토리 시드) + 거래소 최신봉(200개) merge → 항상 최신 full."""
+    """★라이브 로더: data_cache(full 히스토리 시드) + 거래소 최신봉 merge → 항상 최신 full.
+
+    ★2026-07-29 갭수정: 기존엔 limit=200 고정이라 1h 에서 8.3일치만 받아, 시드(data_cache)가
+      낡을수록 시드끝~거래소최古 사이에 구멍이 생겼다(발견 시점 07-01~07-20, 19일 20시간).
+      4h 는 200봉=33일이라 무증상이었다. 시드 끝을 since_ms 로 넘겨 페이지네이션으로 이어받아
+      갭이 원천적으로 생기지 않게 한다(시드가 아무리 낡아도 자가치유). 1h 1000봉=41일 → 통상 1페이지.
+    """
     from config import H4_INTERVAL, H1_INTERVAL
     imap = {"4h": H4_INTERVAL, "1h": H1_INTERVAL, "15m": "15", "1m": "1"}
+    _step_h = {"4h": 4.0, "1h": 1.0, "15m": 0.25, "1m": 1.0 / 60.0}
 
     def loader(sym, tf, data_dir=DATA):
         base = _load(sym, tf, data_dir)
+        iv = imap.get(tf, tf)
+        recent = None
         try:
-            recent = exchange.get_recent_klines_df(category=category, symbol=sym, interval=imap.get(tf, tf), limit=200)
-            return pd.concat([base, recent], ignore_index=True).drop_duplicates("timestamp").sort_values("timestamp").reset_index(drop=True)
+            since = int(pd.Timestamp(base["timestamp"].iloc[-1]).value // 10 ** 6) if len(base) else 0
+            recent = exchange.get_full_klines_df(category=category, symbol=sym, interval=iv,
+                                                 since_ms=since, max_pages=6)
         except Exception as e:
-            print(f"[arm] {sym} {tf} 최신봉 fetch 실패, data_cache 만 사용: {e}")
-            return base
+            print(f"[arm] {sym} {tf} 시드연결 fetch 실패, 최근200봉으로 폴백: {e}")
+            try:
+                recent = exchange.get_recent_klines_df(category=category, symbol=sym, interval=iv, limit=200)
+            except Exception as e2:
+                print(f"[arm] {sym} {tf} 최신봉 fetch 실패, data_cache 만 사용: {e2}")
+                return base
+        out = pd.concat([base, recent], ignore_index=True).drop_duplicates("timestamp") \
+                .sort_values("timestamp").reset_index(drop=True)
+        st = _step_h.get(tf)
+        if st:                                                  # 갭 잔존 시 조용히 넘어가지 않고 경고
+            d = out["timestamp"].diff()
+            n = int((d > pd.Timedelta(hours=st * 1.5)).sum())
+            if n:
+                i = d.idxmax()
+                print(f"[arm] ⚠️ {sym} {tf} 갭 {n}개 잔존 (최대 {out['timestamp'][i-1]} → {out['timestamp'][i]})")
+        return out
     return loader
 
 
